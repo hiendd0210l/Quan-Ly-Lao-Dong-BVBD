@@ -117,24 +117,24 @@ def init_categories():
 
 
 def render_category_management():
-    """Giao diện chính Quản lý Danh mục Hệ thống Dùng chung linh hoạt."""
+    """Giao diện Quản lý Danh mục Hệ thống Dùng chung hỗ trợ tùy chỉnh Cột động."""
     init_categories()
 
     st.subheader("⚙️ QUẢN LÝ DANH MỤC HỆ THỐNG DÙNG CHUNG (CẤU HÌNH MỞ)")
     st.caption(
-        "Quản trị viên có thể tự do khởi tạo thêm danh mục mới, thêm/sửa/xóa cột tiêu đề và chỉnh sửa các giá trị con."
+        "Khai báo linh hoạt danh mục, thêm/bớt cột tiêu đề và chỉnh sửa các dòng dữ liệu."
     )
 
     # -------------------------------------------------------------------------
-    # 1. QUẢN LÝ DANH MỤC LỚN (Thêm / Xóa danh mục)
+    # 1. QUẢN LÝ TÊN DANH MỤC LỚN (THÊM / XÓA DANH MỤC)
     # -------------------------------------------------------------------------
-    with st.expander("🛠️ **QUẢN LÝ TÊN DANH MỤC LỚN (THÊM / XÓA DANH MỤC)**"):
+    with st.expander("🛠️ **QUẢN LÝ DANH MỤC LỚN (THÊM / XÓA DANH MỤC)**"):
         col_c1, col_c2 = st.columns([3, 2])
 
         with col_c1:
             new_cat_name = st.text_input("➕ Nhập tên Danh mục mới muốn thêm:")
             if st.button("Tạo Danh mục mới"):
-                if new_cat_name.strip() == "":
+                if not new_cat_name.strip():
                     st.warning("Vui lòng nhập tên danh mục!")
                 elif new_cat_name in st.session_state["categories"]:
                     st.warning("Danh mục này đã tồn tại!")
@@ -161,7 +161,7 @@ def render_category_management():
     st.divider()
 
     # -------------------------------------------------------------------------
-    # 2. HIỂN THỊ TABS VÀ TỦY CHỈNH BẢNG DỮ LIỆU
+    # 2. CHỈNH SỬA CHI TIẾT BẢNG VÀ CẤU TRÚC CỘT TIÊU ĐỀ
     # -------------------------------------------------------------------------
     category_names = list(st.session_state["categories"].keys())
 
@@ -176,62 +176,58 @@ def render_category_management():
             st.write(f"### Chi tiết danh mục: **{name}**")
             df_cat = st.session_state["categories"][name]
 
-            # -----------------------------------------------------------------
-            # TÙY CHỈNH CỘT TIÊU ĐỀ (THÊM / SỬA / XÓA CỘT)
-            # -----------------------------------------------------------------
-            with st.expander("🏛️ **TÙY CHỈNH CẤU TRÚC CỘT TIÊU ĐỀ (THÊM / SỬA / XÓA CỘT)**"):
-                col_add, col_rename, col_del = st.columns(3)
+            # Block Tùy chỉnh Cột (Thêm / Đổi tên / Xóa cột)
+            with st.expander("📐 **QUẢN LÝ CỘT TIÊU ĐỀ CỦA BẢNG (THÊM / SỬA / XÓA CỘT)**", expanded=True):
+                c_add, c_rename, c_del = st.columns(3)
 
-                # 1. Thêm cột mới
-                with col_add:
+                # --- 1. Thêm cột mới ---
+                with c_add:
                     st.markdown("**➕ Thêm cột mới**")
                     new_col_name = st.text_input(
-                        "Tên cột mới:", key=f"add_col_input_{name}"
+                        "Nhập tên cột mới:", key=f"input_add_col_{name}"
                     )
                     if st.button("Thêm cột", key=f"btn_add_col_{name}"):
                         if not new_col_name.strip():
                             st.warning("Vui lòng nhập tên cột!")
                         elif new_col_name in df_cat.columns:
-                            st.warning("Cột này đã tồn tại!")
+                            st.warning("Cột này đã có trong bảng!")
                         else:
                             st.session_state["categories"][name][new_col_name] = ""
-                            st.success(f"Đã thêm cột '{new_col_name}'!")
+                            st.success(f"Đã thêm cột '{new_col_name}' thành công!")
                             st.rerun()
 
-                # 2. Đổi tên cột hiện tại
-                with col_rename:
-                    st.markdown("**✏️ Đổi tên cột**")
+                # --- 2. Đổi tên cột ---
+                with c_rename:
+                    st.markdown("**✏️ Đổi tên cột tiêu đề**")
                     col_to_rename = st.selectbox(
                         "Chọn cột cần đổi tên:",
                         options=list(df_cat.columns),
-                        key=f"rename_col_select_{name}",
+                        key=f"select_rename_col_{name}",
                     )
                     renamed_col_name = st.text_input(
-                        "Tên cột mới thay thế:", key=f"rename_col_input_{name}"
+                        "Nhập tên mới:", key=f"input_rename_col_{name}"
                     )
-                    if st.button("Đổi tên cột", key=f"btn_rename_col_{name}"):
+                    if st.button("Đổi tên", key=f"btn_rename_col_{name}"):
                         if not renamed_col_name.strip():
                             st.warning("Vui lòng nhập tên cột mới!")
                         elif renamed_col_name in df_cat.columns:
-                            st.warning("Tên cột mới trùng với cột đã có!")
+                            st.warning("Tên cột mới trùng với cột đã tồn tại!")
                         else:
                             st.session_state["categories"][name] = (
                                 st.session_state["categories"][name].rename(
                                     columns={col_to_rename: renamed_col_name}
                                 )
                             )
-                            st.success(
-                                f"Đã đổi tên cột '{col_to_rename}' ➔ '{renamed_col_name}'!"
-                            )
+                            st.success(f"Đã đổi tên cột '{col_to_rename}' ➔ '{renamed_col_name}'!")
                             st.rerun()
 
-                # 3. Xóa cột
-                with col_del:
-                    st.markdown("**🗑️ Xóa cột**")
+                # --- 3. Xóa cột ---
+                with c_del:
+                    st.markdown("**🗑️ Xóa cột khỏi bảng**")
                     col_to_delete = st.selectbox(
                         "Chọn cột cần xóa:",
                         options=list(df_cat.columns),
-                        key=f"del_col_select_{name}",
+                        key=f"select_del_col_{name}",
                     )
                     if st.button("Xóa cột", key=f"btn_del_col_{name}", type="primary"):
                         if len(df_cat.columns) <= 1:
@@ -246,10 +242,10 @@ def render_category_management():
                             st.rerun()
 
             st.write(
-                "💡 *Bạn có thể kích đôi vào ô để sửa nội dung, hoặc thêm/xóa trực tiếp trên bảng dưới đây:*"
+                "💡 *Bạn có thể kích đôi vào ô để sửa nội dung, hoặc thêm/xóa dòng dữ liệu ở bảng bên dưới:*"[cite: 8, 9]
             )
 
-            # Chỉnh sửa nội dung dòng dữ liệu
+            # Bảng nhập/chỉnh sửa dòng dữ liệu
             edited_df = st.data_editor(
                 st.session_state["categories"][name],
                 num_rows="dynamic",
@@ -262,12 +258,12 @@ def render_category_management():
             with c_save:
                 if st.button(f"💾 Lưu danh mục {name}", key=f"btn_save_{name}"):
                     st.session_state["categories"][name] = edited_df
-                    st.success(f"Đã lưu thành công danh mục '{name}'!")
+                    st.success(f"Đã lưu dữ liệu cho danh mục '{name}'!")
                     st.rerun()
 
 
 def get_category_data(category_name):
-    """Hàm bổ trợ để các mô-đun khác sử dụng."""
+    """Hàm hỗ trợ lấy dữ liệu danh mục để sử dụng ở các mô-đun khác."""
     init_categories()
     if category_name in st.session_state["categories"]:
         return st.session_state["categories"][category_name]
