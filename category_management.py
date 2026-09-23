@@ -120,7 +120,7 @@ def render_category_management():
     """Giao diện Quản lý Danh mục Hệ thống Dùng chung hỗ trợ tùy chỉnh Cột động."""
     init_categories()
 
-    st.subheader("⚙️ QUẢN LÝ DANH MỤC HỆ THỐNG DÙNG CHUNG (CẤU HÌNH MỞ)")
+    st.subheader("⚙️ QUẢN LÝ DANH MỤC HỆ THỐNG DÙNG CHUNG")
     st.caption(
         "Khai báo linh hoạt danh mục, thêm/bớt cột tiêu đề và chỉnh sửa các dòng dữ liệu."
     )
