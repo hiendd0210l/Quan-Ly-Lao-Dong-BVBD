@@ -1,5 +1,5 @@
-import plotly.express as px
 import pandas as pd
+import plotly.express as px
 import streamlit as st
 
 from category_management import render_category_management
@@ -12,7 +12,7 @@ st.set_page_config(
     layout="wide",
 )
 
-# 2. Thanh Menu Sidebar bên trái với 18 chức năng + Icon đẹp mắt
+# 2. Thanh Menu Sidebar bên trái với 18 chức năng + Icon
 st.sidebar.title("MENU QUẢN TRỊ CÁN BỘ")
 menu_choice = st.sidebar.radio(
     "Chọn chức năng:",
@@ -39,10 +39,10 @@ menu_choice = st.sidebar.radio(
 )
 
 
-# Hàm hiển thị Trang Dashboard Tổng quan Chuyên nghiệp
+# Hàm hiển thị Trang Dashboard Tổng quan
 def render_dashboard():
     # -------------------------------------------------------------------------
-    # PHẦN 1: HEADER TRÊN CÙNG (LOGO & HÌNH ẢNH BỆNH VIỆN BƯU ĐIỆN)
+    # PHẦN 1: HEADER TRÊN CÙNG (LOGO & TIÊU ĐỀ)
     # -------------------------------------------------------------------------
     col_logo, col_title = st.columns([1, 6])
     with col_logo:
@@ -51,18 +51,13 @@ def render_dashboard():
             width=100,
         )
     with col_title:
-        st.markdown(
-            """
-            <h1 style='margin-bottom: 0px; color: #0056b3;'>BỆNH VIỆN BƯU ĐIỆN</h1>
-            <h4 style='margin-top: 0px; color: #555;'>HỆ THỐNG QUẢN TRỊ TỔNG THỂ NHÂN SỰ & CÁN BỘ Y TẾ</h4>
-            """,
-            unsafe_allow_html=True,  # Đã sửa lại tham số chính xác ở đây
-        )
+        st.title("BỆNH VIỆN BƯU ĐIỆN")
+        st.caption("HỆ THỐNG QUẢN TRỊ TỔNG THỂ NHÂN SỰ & CÁN BỘ Y TẾ")
 
-    # Banner ảnh Bệnh viện Bưu điện chuyên nghiệp
+    # Banner Bệnh viện (Đã sửa lỗi use_container_width)
     st.image(
         "https://buudienhospital.vn/wp-content/uploads/2021/08/banner-benh-vien-buu-dien.jpg",
-        use_column_width=True,
+        use_container_width=True,
     )
 
     st.divider()
