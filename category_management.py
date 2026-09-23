@@ -122,7 +122,7 @@ def render_category_management():
 
     st.subheader("⚙️ QUẢN LÝ DANH MỤC HỆ THỐNG DÙNG CHUNG (CẤU HÌNH MỞ)")
     st.caption(
-        "Khai báo linh hoạt danh mục, thêm/bớt cột tiêu đề và chỉnh sửa các dòng dữ liệu."[cite: 8, 9]
+        "Khai báo linh hoạt danh mục, thêm/bớt cột tiêu đề và chỉnh sửa các dòng dữ liệu."
     )
 
     # -------------------------------------------------------------------------
@@ -241,7 +241,7 @@ def render_category_management():
                             st.success(f"Đã xóa cột '{col_to_delete}'!")
                             st.rerun()
 
-            st.caption("💡 *Kích đôi vào ô để sửa nội dung, hoặc thêm/xóa dòng dữ liệu trực tiếp trên bảng bên dưới:*")[cite: 8, 9]
+            st.caption("💡 *Kích đôi vào ô để sửa nội dung, hoặc thêm/xóa dòng dữ liệu trực tiếp trên bảng bên dưới:*")
 
             # Bảng chỉnh sửa dữ liệu
             edited_df = st.data_editor(
