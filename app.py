@@ -43,12 +43,13 @@ menu_choice = st.sidebar.radio(
 # Hàm hiển thị Trang Dashboard Tổng quan
 def render_dashboard():
     # -------------------------------------------------------------------------
-    # PHẦN 1: HEADER TRÊN CÙNG (LOGO & TIÊU ĐỀ)
+    # PHẦN 1: HEADER TRÊN CÙNG (LOGO PHÓNG TO GẤP ĐÔI & TIÊU ĐỀ)
     # -------------------------------------------------------------------------
-    col_logo, col_title = st.columns([1, 6])
+    # Tăng kích thước cột chứa Logo từ [1, 6] thành [2, 6] để đủ không gian hiển thị
+    col_logo, col_title = st.columns([2, 6])
 
     with col_logo:
-        # Đường dẫn tới file logo.png nằm trong thư mục blocks/main/
+        # Danh sách đường dẫn tới file logo
         logo_paths = [
             "blocks/main/logo.png",
             "blocks/main/Logo.png",
@@ -58,7 +59,8 @@ def render_dashboard():
         logo_found = False
         for path in logo_paths:
             if os.path.exists(path):
-                st.image(path, width=120)
+                # Tăng width từ 120 lên 240 (gấp đôi kích thước cũ)
+                st.image(path, width=240)
                 logo_found = True
                 break
 
