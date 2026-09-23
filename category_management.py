@@ -117,7 +117,7 @@ def render_category_management():
     """Giao diện chính Quản lý Danh mục Hệ thống Dùng chung linh hoạt."""
     init_categories()
 
-    st.subheader("⚙️ QUẢN LÝ DANH MỤC HỆ THỐNG DÙNG CHUNG (CẤU HÌNH MỞ)")
+    st.subheader("⚙️ QUẢN LÝ DANH MỤC HỆ THỐNG DÙNG CHUNG")
     st.caption(
         "Quản trị viên có thể tự do khởi tạo thêm danh mục mới, chỉnh sửa hoặc bổ sung các tùy chọn con dùng chung cho toàn bộ hệ thống."
     )
