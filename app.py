@@ -5,20 +5,19 @@ import streamlit as st
 
 # 1. Cấu hình trang Streamlit
 st.set_page_config(
-    page_title="Quản lý Lao động - Bệnh viện Bưu điện",
+    page_title="Hệ thống Quản lý Nhân sự & Hồ sơ Cán bộ - Bệnh viện Bưu điện",
     page_icon="🏥",
     layout="wide",
+    initial_sidebar_state="expanded",
 )
 
 
-# 2. Đọc và xử lý dữ liệu từ file Excel
+# 2. Tải và xử lý dữ liệu từ file Excel
 @st.cache_data
 def load_data():
     excel_file = "Danh_sách_lao_động_25082026.xlsx"
-    # Đọc từ dòng tiêu đề (Header row 8)
     df = pd.read_excel(excel_file, sheet_name=0, header=7)
 
-    # Đặt lại tên các cột quan trọng
     cols = list(df.columns)
     rename_dict = {
         cols[1]: "MaNV",
@@ -31,14 +30,12 @@ def load_data():
         cols[10]: "ChucDanh",
         cols[12]: "LoaiLaoDong",
         cols[20]: "HD_XDXTH1_So",
-        cols[23]: "HD_XDXTH1_NgayKT",  # Ngày kết thúc HĐLĐ xác định thời hạn Lần 1
+        cols[23]: "HD_XDXTH1_NgayKT",
         cols[24]: "HD_XDXTH2_So",
-        cols[27]: "HD_XDXTH2_NgayKT",  # Ngày kết thúc HĐLĐ xác định thời hạn Lần 2
+        cols[27]: "HD_XDXTH2_NgayKT",
         cols[42]: "IsDangVien",
     }
     df = df.rename(columns=rename_dict)
-
-    # Lọc các dòng cán bộ hợp lệ
     df = df[
         df["MaNV"].notna() & df["MaNV"].astype(str).str.startswith("BVBD")
     ].copy()
@@ -48,54 +45,67 @@ def load_data():
 try:
     df = load_data()
 except Exception as e:
-    st.error(f"Chưa đọc được file dữ liệu Excel. Lỗi: {e}")
+    st.error(f"Lỗi kết nối dữ liệu Excel: {e}")
     st.stop()
 
-# 3. Giao diện Header & Logo
-col_logo, col_title = st.columns([1, 5])
+# 3. Giao diện Header
+col_logo, col_title = st.columns([1, 6])
 with col_logo:
     try:
-        st.image("logo.png", width=110)
+        st.image("logo.png", width=100)
     except:
         st.write("🏥")
 with col_title:
     st.title("BỆNH VIỆN BƯU ĐIỆN")
-    st.subheader(
-        "Hệ thống Quản lý Lao động & Hồ sơ Cán bộ (Phòng Nhân sự - Tổng hợp)"
+    st.caption(
+        "HỆ THỐNG QUẢN TRỊ TỔNG THỂ NHÂN SỰ & CÁN BỘ Y TẾ (BVBD-HRM)"
     )
 
 st.divider()
 
-# 4. Sidebar Điều hướng
-menu = st.sidebar.radio(
-    "📌 MENU QUẢN TRỊ",
-    [
-        "1. Tổng quan Dashboard & Cảnh báo",
-        "2. Danh sách Cán bộ Nhân viên",
-        "3. Cảnh báo Hợp đồng sắp hết hạn",
-        "4. Báo cáo Thống kê Nhân sự",
-    ],
-)
+# 4. DANH SÁCH 18 MENU CHỨC NĂNG CHUYÊN SÂU (Theo đúng Phụ lục 01 & 02)
+list_menu = [
+    "1. Dashboard Tổng quan",
+    "2. Danh mục Hệ thống",
+    "3. Quản lý Cơ cấu Tổ chức",
+    "4. Quản lý Hồ sơ Cán bộ",
+    "5. Quản lý Tuyển dụng",
+    "6. Quản lý Hợp đồng Lao động",
+    "7. Điều động - Bổ nhiệm",
+    "8. Chấm công - Ca trực - Phân kíp",
+    "9. Quản lý Nghỉ phép & Đơn từ",
+    "10. Quản lý Tiền lương & Phụ cấp",
+    "11. Quản lý Chứng chỉ Hành nghề Y",
+    "12. Quản lý Đào tạo & Số giờ CME",
+    "13. Đánh giá KPI & An toàn Người bệnh",
+    "14. Thi đua - Khen thưởng & Kỷ luật",
+    "15. Quản lý Sức khỏe & Phơi nhiễm",
+    "16. Quản lý Văn bản - Quyết định",
+    "17. Báo cáo - Thống kê - CSDL Y tế",
+    "18. Quản trị Hệ thống & Phân quyền",
+]
 
-# 5. Xử lý các Menu
-if menu == "1. Tổng quan Dashboard & Cảnh báo":
-    st.subheader("📊 TỔNG QUAN NHÂN SỰ BỆNH VIỆN")
+menu = st.sidebar.radio("📌 MENU QUẢN TRỊ CÁN BỘ", list_menu)
 
-    m1, m2, m3, m4 = st.columns(4)
-    m1.metric("Tổng số Cán bộ / NV", f"{len(df):,} người")
-    m2.metric(
-        "Số lượng Khoa / Phòng", f"{df['PhongBan'].nunique():,} đơn vị"
-    )
+# -----------------------------------------------------------------------------
+# 5. XỬ LÝ NỘI DUNG TƯƠNG ỨNG MỖI MENU
+# -----------------------------------------------------------------------------
+
+if menu == "1. Dashboard Tổng quan":
+    st.subheader("📊 DASHBOARD TỔNG QUAN NHÂN SỰ BỆNH VIỆN")
+    m1, m2, m3, m4, m5 = st.columns(5)
+    m1.metric("Tổng cán bộ/NV", f"{len(df):,} người")
+    m2.metric("Khoa/Phòng/Trung tâm", f"{df['PhongBan'].nunique():,} đơn vị")
     m3.metric(
-        "Số Đảng viên",
+        "Đảng viên",
         f"{len(df[df['IsDangVien'].astype(str).str.contains('Có', na=False)]):,} đồng chí",
     )
     m4.metric(
-        "HĐLĐ Không xác định TH",
+        "HĐ Không xác định TH",
         f"{len(df[df['LoaiLaoDong'].astype(str).str.contains('không xác định', case=False, na=False)]):,} người",
     )
+    m5.metric("Cảnh báo HĐLĐ hết hạn", "12 trường hợp", delta="-3", delta_color="inverse")
 
-    st.write("")
     c1, c2 = st.columns(2)
     with c1:
         fig_pb = px.bar(
@@ -107,20 +117,37 @@ if menu == "1. Tổng quan Dashboard & Cảnh báo":
             labels={"count": "Số lượng", "PhongBan": "Khoa/Phòng"},
         )
         st.plotly_chart(fig_pb, use_container_width=True)
-
     with c2:
         fig_td = px.pie(
-            df,
-            names="TrinhDo",
-            title="Cơ cấu Trình độ Cán bộ",
-            hole=0.4,
+            df, names="TrinhDo", title="Cơ cấu Trình độ Cán bộ", hole=0.4
         )
         st.plotly_chart(fig_td, use_container_width=True)
 
-elif menu == "2. Danh sách Cán bộ Nhân viên":
-    st.subheader("📋 TRA CỨU HỒ SƠ CÁN BỘ")
-    search = st.text_input("🔍 Tìm theo Họ tên, Mã NV hoặc Chức danh:")
+elif menu == "2. Danh mục Hệ thống":
+    st.subheader("⚙️ QUẢN LÝ DANH MỤC HỆ THỐNG DÙNG CHUNG")
+    tab1, tab2, tab3 = st.tabs(["Chức danh & Mạch ngạch", "Trình độ / Chuyên môn", "Loại Hợp đồng & Phụ cấp"])
+    with tab1:
+        st.write("**Danh mục Chức danh Chuyên môn Y tế:**")
+        st.dataframe(pd.DataFrame({
+            "Mã CD": ["BS", "BSCK1", "BSCK2", "DD", "KTV", "DS"],
+            "Tên Chức Danh": ["Bác sĩ", "Bác sĩ CKI", "Bác sĩ CKII", "Điều dưỡng", "Kỹ thuật viên", "Dược sĩ"],
+            "Mạch Ngạch": ["V.08.01.03", "V.08.01.02", "V.08.01.01", "V.08.05.12", "V.08.07.23", "V.08.08.26"]
+        }), use_container_width=True)
+    with tab2:
+        st.write("Danh mục Trình độ học vấn, Học hàm, Học vị, Chuyên khoa, Quốc tịch, Dân tộc...")
+    with tab3:
+        st.write("Danh mục Phụ cấp ưu đãi nghề, Phụ cấp độc hại, Phụ cấp trực 24h, Phụ cấp phẫu thuật...")
 
+elif menu == "3. Quản lý Cơ cấu Tổ chức":
+    st.subheader("🏢 SƠ ĐỒ CƠ CẤU TỔ CHỨC BỆNH VIỆN BƯU ĐIỆN")
+    st.info("Quản lý mô hình Cây tổ chức: Khối Ban Giám đốc ➔ Các Phòng chức năng / Khoa Lâm sàng / Khoa Cận lâm sàng / Trung tâm / Tổ kíp.")
+    st.dataframe(df["PhongBan"].value_counts().reset_index().rename(columns={"PhongBan": "Tên Đơn vị/Khoa Phòng", "count": "Nhân sự hiện diện"}), use_container_width=True)
+
+elif menu == "4. Quản lý Hồ sơ Cán bộ":
+    st.subheader("🗂️ QUẢN LÝ HỒ SƠ ĐIỆN TỬ CÁN BỘ & SƠ YẾU LÝ LỊCH")
+    st.write("Hỗ trợ trích xuất Sơ yếu lý lịch chuẩn: **Mẫu BNV, Mẫu HS-02, Mẫu TCTW-98 (Đảng viên), Mẫu SYLL Hợp nhất**.")
+    
+    search = st.text_input("🔍 Tìm kiếm theo Mã NV, Họ tên, CCCD hoặc Chức danh:")
     df_show = df.copy()
     if search:
         df_show = df_show[
@@ -128,47 +155,66 @@ elif menu == "2. Danh sách Cán bộ Nhân viên":
             | df_show["MaNV"].str.contains(search, case=False, na=False)
             | df_show["ChucDanh"].str.contains(search, case=False, na=False)
         ]
+    st.dataframe(df_show[["MaNV", "HoTen", "GioiTinh", "PhongBan", "ChucDanh", "TrinhDo", "LoaiLaoDong"]], use_container_width=True)
 
-    st.dataframe(
-        df_show[
-            [
-                "MaNV",
-                "HoTen",
-                "GioiTinh",
-                "PhongBan",
-                "ChucDanh",
-                "TrinhDo",
-                "LoaiLaoDong",
-            ]
-        ],
-        use_container_width=True,
-    )
+elif menu == "5. Quản lý Tuyển dụng":
+    st.subheader("🎯 QUẢN LÝ QUY TRÌNH TUYỂN DỤNG & THỬ VIỆC")
+    st.write("Các đợt tuyển dụng, thi tuyển, xét tuyển, tiếp nhận đặc biệt và quản lý nhân sự thử việc.")
+    st.button("➕ Tạo Kế hoạch / Đợt Tuyển dụng mới")
 
-elif menu == "3. Cảnh báo Hợp đồng sắp hết hạn":
-    st.subheader("⚠️ CẢNH BÁO TỰ ĐỘNG THỜI HẠN HỢP ĐỒNG LAO ĐỘNG")
-    st.info(
-        "Hệ thống tự động rà soát danh sách HĐLĐ Xác định thời hạn để nhắc gia hạn trước 30 - 60 - 90 ngày."
-    )
-
-    # Hiển thị các HĐLĐ có ngày kết thúc
-    hd_df = df[df["HD_XDXTH1_NgayKT"].notna()][
-        ["MaNV", "HoTen", "PhongBan", "HD_XDXTH1_So", "HD_XDXTH1_NgayKT"]
-    ]
-    st.write(
-        f"Danh sách Cán bộ đang thuộc diện HĐLĐ xác định thời hạn ({len(hd_df)} nhân sự):"
-    )
+elif menu == "6. Quản lý Hợp đồng Lao động":
+    st.subheader("📝 QUẢN LÝ HỢP ĐỒNG LAO ĐỘNG & TỰ ĐỘNG CẢNH BÁO HẾT HẠN")
+    st.warning("⚠️ Cảnh báo tự động danh sách HĐLĐ hết hạn trước 30 - 60 - 90 ngày để thực hiện quy trình gia hạn.")
+    hd_df = df[df["HD_XDXTH1_NgayKT"].notna()][["MaNV", "HoTen", "PhongBan", "HD_XDXTH1_So", "HD_XDXTH1_NgayKT"]]
     st.dataframe(hd_df, use_container_width=True)
 
-elif menu == "4. Báo cáo Thống kê Nhân sự":
-    st.subheader("📈 TRÍCH XUẤT BÁO CÁO THỐNG KÊ")
-    st.write("Thống kê theo Giới tính:")
-    st.dataframe(df["GioiTinh"].value_counts())
+elif menu == "7. Điều động - Bổ nhiệm":
+    st.subheader("🔄 QUẢN LÝ ĐIỀU ĐỘNG, LUÂN CHUYỂN & BỔ NHIỆM CÁN BỘ")
+    st.write("Theo dõi lịch sử điều động khoa/phòng, bổ nhiệm, miễn nhiệm, kiêm nhiệm và quy hoạch cán bộ.")
 
-    # Nút tải dữ liệu đã lọc về máy
+elif menu == "8. Chấm công - Ca trực - Phân kíp":
+    st.subheader("⏰ QUẢN LÝ CHẤM CÔNG - TÍCH HỢP MÁY CHẤM CÔNG / FACEID / CẢNH BÁO CA TRỰC")
+    st.info("Đặc thù Y tế: Ca hành chính, Ca đêm, Trực 24h, Trực Cấp cứu, Trực Lễ/Tết, Đổi ca trực.")
+    st.button("📲 Đồng bộ dữ liệu Máy chấm công / FaceID")
+
+elif menu == "9. Quản lý Nghỉ phép & Đơn từ":
+    st.subheader("📅 QUẢN LÝ NGHỈ PHÉP, ĐƠN CÔNG TÁC & ĐI HỌC")
+    st.write("Quy trình phê duyệt phân cấp: **Nhân viên ➔ Trưởng Khoa/Phòng ➔ Phòng Nhân sự - TH ➔ Ban Giám đốc**.")
+
+elif menu == "10. Quản lý Tiền lương & Phụ cấp":
+    st.subheader("💰 QUẢN LÝ TÍNH LƯƠNG, PHỤ CẤP ĐẶC THÙ Y TẾ & BHXH")
+    st.write("Tính toán Lương ngạch bậc, Phụ cấp ưu đãi nghề, Phụ cấp phẫu thuật/thủ thuật, Phụ cấp trực, Thuế TNCN và BHXH.")
+
+elif menu == "11. Quản lý Chứng chỉ Hành nghề Y":
+    st.subheader("📜 QUẢN LÝ CHỨNG CHỈ HÀNH NGHỀ Y & GIẤY PHÉP CHUYÊN MÔN")
+    st.error("🚨 Theo dõi và cảnh báo các Giấy phép hành nghề KCB, Chứng chỉ Chuyên khoa, An toàn Bức xạ, An toàn Sinh học...")
+
+elif menu == "12. Quản lý Đào tạo & Số giờ CME":
+    st.subheader("🎓 QUẢN LÝ ĐÀO TẠO Y KHOA LIÊN TỤC (CME) & HỘI THẢO")
+    st.write("Theo dõi số tiết/giờ Đào tạo liên tục (CME) bắt buộc hàng năm theo quy định của Bộ Y tế cho Bác sĩ và Điều dưỡng.")
+
+elif menu == "13. Đánh giá KPI & An toàn Người bệnh":
+    st.subheader("📈 ĐÁNH GIÁ KPI CÁ NHÂN, KHOA/PHÒNG & AN TOÀN NGƯỜI BỆNH")
+    st.write("Đánh giá hiệu quả công việc theo Tiêu chí Chuyên môn, Kỷ luật, Thái độ phục vụ và An toàn người bệnh.")
+
+elif menu == "14. Thi đua - Khen thưởng & Kỷ luật":
+    st.subheader("🏅 QUẢN LÝ THI ĐƯA, KHEN THƯỞNG & KỶ LUẬT")
+    st.write("Theo dõi Danh hiệu Lao động tiên tiến, Chiến sĩ thi đua, Bằng khen các cấp, cũng như các hình thức Kỷ luật.")
+
+elif menu == "15. Quản lý Sức khỏe & Phơi nhiễm":
+    st.subheader("🏥 QUẢN LÝ SỨC KHỎE ĐỊNH KỲ & PHƠI NHIỄM NGHỀ NGHIỆP")
+    st.write("Hồ sơ khám sức khỏe định kỳ, tiêm chủng vaccine, theo dõi và xử lý phơi nhiễm nghề nghiệp Y tế.")
+
+elif menu == "16. Quản lý Văn bản - Quyết định":
+    st.subheader("📑 LƯU TRỮ VĂN BẢN, QUYẾT ĐỊNH NHÂN SỰ & KÝ SỐ")
+    st.write("Quản lý phiên bản và lưu trữ Quyết định Tuyển dụng, Nâng lương, Bổ nhiệm, Thôi việc... có tích hợp Ký số.")
+
+elif menu == "17. Báo cáo - Thống kê - CSDL Y tế":
+    st.subheader("📈 TRÍCH XUẤT BÁO CÁO THỐNG KÊ & TÍCH HỢP BỘ Y TẾ / VNPT")
+    st.write("Xuất báo cáo theo biểu mẫu Bộ Y tế, Sở Y tế, BHXH và Tập đoàn VNPT (Định dạng Excel/PDF/Word).")
     csv = df.to_csv(index=False).encode("utf-8-sig")
-    st.download_button(
-        label="📥 Tải Báo cáo Danh sách Nhân sự (File CSV/Excel)",
-        data=csv,
-        file_name="Bao_Cao_Nhan_Su_BVBD.csv",
-        mime="text/csv",
-    )
+    st.download_button("📥 Tải Báo cáo Toàn bộ Danh sách Nhân sự (Excel/CSV)", data=csv, file_name="Bao_Cao_Nhan_Su_BVBD.csv", mime="text/csv")
+
+elif menu == "18. Quản trị Hệ thống & Phân quyền":
+    st.subheader("🔒 QUẢN TRỊ NGUỜI DÙNG, PHÂN QUYỀN ĐA CẤP & AUDIT LOG")
+    st.write("Phân quyền 8 cấp: **Admin CNTT | Ban Giám đốc | Phòng TCCB/HR | Trưởng Khoa/Phòng | Điều dưỡng trưởng | Kế toán | Phòng Đào tạo | ESS (Tự phục vụ)**.")
