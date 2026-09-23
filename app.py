@@ -56,7 +56,7 @@ def render_dashboard():
             <h1 style='margin-bottom: 0px; color: #0056b3;'>BỆNH VIỆN BƯU ĐIỆN</h1>
             <h4 style='margin-top: 0px; color: #555;'>HỆ THỐNG QUẢN TRỊ TỔNG THỂ NHÂN SỰ & CÁN BỘ Y TẾ</h4>
             """,
-            unsafe_content_allowed=True,
+            unsafe_allow_html=True,  # Đã sửa lại tham số chính xác ở đây
         )
 
     # Banner ảnh Bệnh viện Bưu điện chuyên nghiệp
