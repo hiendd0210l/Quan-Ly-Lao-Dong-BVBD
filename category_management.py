@@ -122,7 +122,7 @@ def render_category_management():
 
     st.subheader("⚙️ QUẢN LÝ DANH MỤC HỆ THỐNG DÙNG CHUNG (CẤU HÌNH MỞ)")
     st.caption(
-        "Khai báo linh hoạt danh mục, thêm/bớt cột tiêu đề và chỉnh sửa các dòng dữ liệu."
+        "Khai báo linh hoạt danh mục, thêm/bớt cột tiêu đề và chỉnh sửa các dòng dữ liệu."[cite: 8, 9]
     )
 
     # -------------------------------------------------------------------------
@@ -176,8 +176,8 @@ def render_category_management():
             st.write(f"### Chi tiết danh mục: **{name}**")
             df_cat = st.session_state["categories"][name]
 
-            # Block Tùy chỉnh Cột (Thêm / Đổi tên / Xóa cột)
-            with st.expander("📐 **QUẢN LÝ CỘT TIÊU ĐỀ CỦA BẢNG (THÊM / SỬA / XÓA CỘT)**", expanded=True):
+            # Quản lý Cột tiêu đề (Thêm / Đổi tên / Xóa cột)
+            with st.expander("📐 **QUẢN LÝ CỘT TIÊU ĐỀ CỦA BẢNG (THÊM / SỬA / XÓA CỘT)**", expanded=False):
                 c_add, c_rename, c_del = st.columns(3)
 
                 # --- 1. Thêm cột mới ---
@@ -241,11 +241,9 @@ def render_category_management():
                             st.success(f"Đã xóa cột '{col_to_delete}'!")
                             st.rerun()
 
-            st.write(
-                "💡 *Bạn có thể kích đôi vào ô để sửa nội dung, hoặc thêm/xóa dòng dữ liệu ở bảng bên dưới:*"[cite: 8, 9]
-            )
+            st.caption("💡 *Kích đôi vào ô để sửa nội dung, hoặc thêm/xóa dòng dữ liệu trực tiếp trên bảng bên dưới:*")[cite: 8, 9]
 
-            # Bảng nhập/chỉnh sửa dòng dữ liệu
+            # Bảng chỉnh sửa dữ liệu
             edited_df = st.data_editor(
                 st.session_state["categories"][name],
                 num_rows="dynamic",
