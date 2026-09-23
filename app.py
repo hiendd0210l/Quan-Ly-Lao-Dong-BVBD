@@ -48,24 +48,26 @@ def render_dashboard():
     col_logo, col_title = st.columns([1, 6])
 
     with col_logo:
-        # Kiểm tra nếu file Logo.png có trong kho lưu trữ
-        if os.path.exists("Logo.png"):
-            st.image("Logo.png", width=110)
-        elif os.path.exists("logo.png"):
-            st.image("logo.png", width=110)
-        else:
-            # Dùng icon dự phòng nếu không tìm thấy file ảnh
+        # Đường dẫn tới file logo.png nằm trong thư mục blocks/main/
+        logo_paths = [
+            "blocks/main/logo.png",
+            "blocks/main/Logo.png",
+            "logo.png",
+            "Logo.png",
+        ]
+        logo_found = False
+        for path in logo_paths:
+            if os.path.exists(path):
+                st.image(path, width=120)
+                logo_found = True
+                break
+
+        if not logo_found:
             st.markdown("## 🏥")
 
     with col_title:
         st.title("BỆNH VIỆN BƯU ĐIỆN")
         st.caption("HỆ THỐNG QUẢN TRỊ TỔNG THỂ NHÂN SỰ & CÁN BỘ Y TẾ")
-
-    # Hiển thị Banner nếu có file local hoặc dùng link ổn định
-    if os.path.exists("banner.jpg"):
-        st.image("banner.jpg", use_container_width=True)
-    elif os.path.exists("banner.png"):
-        st.image("banner.png", use_container_width=True)
 
     st.divider()
 
@@ -150,7 +152,7 @@ def render_dashboard():
         },
         {
             "Mã CB": "NV0308",
-            "Họ and tên": "Lê Hoàng Nam",
+            "Họ và tên": "Lê Hoàng Nam",
             "Khoa / Phòng": "Khoa Cận lâm sàng",
             "Loại cảnh báo": "📝 Hết hạn Hợp đồng Lao động",
             "Thời hạn / Ngày tác nghiệp": "15/10/2026",
