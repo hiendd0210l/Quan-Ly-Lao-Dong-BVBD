@@ -1,3 +1,4 @@
+import os
 import pandas as pd
 import plotly.express as px
 import streamlit as st
@@ -45,20 +46,26 @@ def render_dashboard():
     # PHẦN 1: HEADER TRÊN CÙNG (LOGO & TIÊU ĐỀ)
     # -------------------------------------------------------------------------
     col_logo, col_title = st.columns([1, 6])
+
     with col_logo:
-        st.image(
-            "https://upload.wikimedia.org/wikipedia/commons/thumb/c/c5/Logo_VNPT.svg/1200px-Logo_VNPT.svg.png",
-            width=100,
-        )
+        # Kiểm tra nếu file Logo.png có trong kho lưu trữ
+        if os.path.exists("Logo.png"):
+            st.image("Logo.png", width=110)
+        elif os.path.exists("logo.png"):
+            st.image("logo.png", width=110)
+        else:
+            # Dùng icon dự phòng nếu không tìm thấy file ảnh
+            st.markdown("## 🏥")
+
     with col_title:
         st.title("BỆNH VIỆN BƯU ĐIỆN")
         st.caption("HỆ THỐNG QUẢN TRỊ TỔNG THỂ NHÂN SỰ & CÁN BỘ Y TẾ")
 
-    # Banner Bệnh viện (Đã sửa lỗi use_container_width)
-    st.image(
-        "https://buudienhospital.vn/wp-content/uploads/2021/08/banner-benh-vien-buu-dien.jpg",
-        use_container_width=True,
-    )
+    # Hiển thị Banner nếu có file local hoặc dùng link ổn định
+    if os.path.exists("banner.jpg"):
+        st.image("banner.jpg", use_container_width=True)
+    elif os.path.exists("banner.png"):
+        st.image("banner.png", use_container_width=True)
 
     st.divider()
 
@@ -85,7 +92,6 @@ def render_dashboard():
     col_chart, col_table = st.columns([5, 4])
 
     with col_chart:
-        # Biểu đồ tròn minh họa sinh động
         fig = px.pie(
             df_structure,
             values="Số lượng (Người)",
@@ -114,7 +120,6 @@ def render_dashboard():
     # -------------------------------------------------------------------------
     st.subheader("⚠️ THỐNG KÊ CẢNH BÁO THỜI HẠN NHÂN SỰ")
 
-    # Thống kê nhanh bằng thẻ Metric
     c1, c2, c3, c4, c5 = st.columns(5)
     c1.metric("🎂 Sinh nhật tháng này", "18 cán bộ", delta="Tháng 9")
     c2.metric("📈 Đến hạn nâng lương", "12 người", delta="Trong 30 ngày")
@@ -124,7 +129,6 @@ def render_dashboard():
 
     st.write("")
 
-    # Bảng chi tiết danh sách cảnh báo
     st.markdown("#### 🔔 Danh sách Cán bộ đến hạn cần xử lý")
 
     alert_data = pd.DataFrame([
@@ -146,7 +150,7 @@ def render_dashboard():
         },
         {
             "Mã CB": "NV0308",
-            "Họ và tên": "Lê Hoàng Nam",
+            "Họ and tên": "Lê Hoàng Nam",
             "Khoa / Phòng": "Khoa Cận lâm sàng",
             "Loại cảnh báo": "📝 Hết hạn Hợp đồng Lao động",
             "Thời hạn / Ngày tác nghiệp": "15/10/2026",
@@ -177,7 +181,7 @@ def render_dashboard():
     )
 
 
-# 3. Điều hướng giao diện theo Lựa chọn của Menu
+# 3. Điều hướng giao diện
 if "1. Dashboard Tổng quan" in menu_choice:
     render_dashboard()
 
