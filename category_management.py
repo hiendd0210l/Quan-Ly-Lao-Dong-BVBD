@@ -1,3 +1,4 @@
+import json
 import os
 import pandas as pd
 import streamlit as st
@@ -5,9 +6,136 @@ import streamlit as st
 # Thư mục lưu dữ liệu vĩnh viễn
 DATA_DIR = "data_categories"
 os.makedirs(DATA_DIR, exist_ok=True)
+CONFIG_FILE = os.path.join(DATA_DIR, "category_list.json")
+
+# Danh sách danh mục mặc định ban đầu
+DEFAULT_CATEGORIES = {
+    "chuc_danh": {
+        "title": "📌 Chức danh & Mã ngạch",
+        "df": pd.DataFrame({
+            "Mã CĐ": ["BS", "BSCK1", "BSCK2", "ĐĐ", "KTV", "DS"],
+            "Tên Chức Danh": [
+                "Bác sĩ",
+                "Bác sĩ CKI",
+                "Bác sĩ CKII",
+                "Điều dưỡng",
+                "Kỹ thuật viên",
+                "Dược sĩ",
+            ],
+            "Mã Ngạch": [
+                "V.08.01.03",
+                "V.08.01.02",
+                "V.08.01.01",
+                "V.08.05.12",
+                "V.08.07.23",
+                "V.08.08.20",
+            ],
+            "Ghi chú": [
+                "Lâm sàng",
+                "Chuyên khoa 1",
+                "Chuyên khoa 2",
+                "Chăm sóc",
+                "Cận lâm sàng",
+                "Khoa Dược",
+            ],
+        }),
+    },
+    "trinh_do": {
+        "title": "🎓 Trình độ chuyên môn",
+        "df": pd.DataFrame({
+            "Mã TĐ": ["TS", "ThS", "BSCKII", "BSCKI", "CN", "CĐ", "TC"],
+            "Tên Trình độ": [
+                "Tiến sĩ",
+                "Thạc sĩ",
+                "Bác sĩ Chuyên khoa II",
+                "Bác sĩ Chuyên khoa I",
+                "Cử nhân / Đại học",
+                "Cao đẳng",
+                "Trung cấp",
+            ],
+            "Ghi chú": [
+                "Sau đại học",
+                "Sau đại học",
+                "Sau đại học",
+                "Sau đại học",
+                "Đại học",
+                "Cao đẳng",
+                "Trung cấp",
+            ],
+        }),
+    },
+    "loai_hop_dong": {
+        "title": "📝 Loại Hợp đồng Lao động",
+        "df": pd.DataFrame({
+            "Mã HĐ": ["KTH", "12T", "36T", "TV"],
+            "Tên Loại Hợp đồng": [
+                "HĐLĐ Không xác định thời hạn",
+                "HĐLĐ Xác định thời hạn 12 tháng",
+                "HĐLĐ Xác định thời hạn 36 tháng",
+                "Hợp đồng Thử việc",
+            ],
+            "Thời hạn (Tháng)": ["Vô thời hạn", "12", "36", "02"],
+            "Ghi chú": ["Chính thức", "Chính thức", "Chính thức", "Thử việc"],
+        }),
+    },
+    "phu_cap": {
+        "title": "💰 Danh mục Phụ cấp / Lương",
+        "df": pd.DataFrame({
+            "Mã PC": ["PC_CV", "PC_UD", "PC_TN", "PC_DH"],
+            "Tên Loại Phụ cấp": [
+                "Phụ cấp Chức vụ",
+                "Phụ cấp Ưu đãi nghề Y tế",
+                "Phụ cấp Thâm niên",
+                "Phụ cấp Độc hại / Nguy hiểm",
+            ],
+            "Tỷ lệ / Mức hưởng": ["0.4", "40%", "10%", "0.2"],
+            "Ghi chú": [
+                "Trưởng/Phó khoa",
+                "Cán bộ y tế",
+                "Trên 5 năm",
+                "Môi trường độc hại",
+            ],
+        }),
+    },
+    "ngach_luong": {
+        "title": "🏛️ Ngạch bậc lương cơ bản",
+        "df": pd.DataFrame({
+            "Mã Ngạch": ["V.08.01.01", "V.08.01.02", "V.08.01.03", "V.08.05.12"],
+            "Tên Ngạch lương": [
+                "Bác sĩ cao cấp (Hạng I)",
+                "Bác sĩ chính (Hạng II)",
+                "Bác sĩ (Hạng III)",
+                "Điều dưỡng (Hạng III)",
+            ],
+            "Hệ số Bậc 1": ["6.20", "4.40", "2.34", "2.34"],
+            "Bậc tối đa": ["8", "8", "12", "12"],
+        }),
+    },
+}
 
 
-# 1. Hàm nạp dữ liệu từ file CSV
+# 1. Hàm nạp danh sách cấu hình các danh mục
+def load_category_list():
+    if os.path.exists(CONFIG_FILE):
+        try:
+            with open(CONFIG_FILE, "r", encoding="utf-8") as f:
+                return json.load(f)
+        except Exception:
+            pass
+    # Mặc định tạo danh sách ban đầu
+    initial_list = {
+        cat_key: item["title"] for cat_key, item in DEFAULT_CATEGORIES.items()
+    }
+    save_category_list(initial_list)
+    return initial_list
+
+
+def save_category_list(cat_dict):
+    with open(CONFIG_FILE, "w", encoding="utf-8") as f:
+        json.dump(cat_dict, f, ensure_ascii=False, indent=2)
+
+
+# 2. Hàm nạp dữ liệu từ file CSV
 def load_category_data(cat_key, default_df):
     file_path = os.path.join(DATA_DIR, f"{cat_key}.csv")
     if os.path.exists(file_path):
@@ -18,7 +146,7 @@ def load_category_data(cat_key, default_df):
     return default_df
 
 
-# 2. Hàm lưu dữ liệu bền vững xuống file CSV
+# 3. Hàm lưu dữ liệu CSV vĩnh viễn
 def save_category_data(cat_key, df):
     file_path = os.path.join(DATA_DIR, f"{cat_key}.csv")
     try:
@@ -29,10 +157,17 @@ def save_category_data(cat_key, df):
         return False
 
 
-# 3. Giao diện quản lý từng danh mục cụ thể
-def render_single_category(cat_key, cat_title, default_df):
+# 4. Giao diện quản lý nội dung của từng Danh mục cụ thể
+def render_single_category(cat_key, cat_title):
     session_key = f"df_{cat_key}"
     editor_key = f"editor_{cat_key}"
+
+    # Lấy dataframe mặc định nếu có
+    default_df = pd.DataFrame(
+        {"Mã": ["M01"], "Tên danh mục": ["Mẫu 01"], "Ghi chú": [""]}
+    )
+    if cat_key in DEFAULT_CATEGORIES:
+        default_df = DEFAULT_CATEGORIES[cat_key]["df"]
 
     # Khởi tạo dữ liệu vào session state
     if session_key not in st.session_state:
@@ -54,7 +189,7 @@ def render_single_category(cat_key, cat_title, default_df):
                 index=False, encoding="utf-8-sig"
             )
             st.download_button(
-                label=f"📥 Tải xuống File mẫu ({cat_title})",
+                label=f"📥 Tải xuống File mẫu",
                 data=sample_csv,
                 file_name=f"Mau_{cat_key}.csv",
                 mime="text/csv",
@@ -115,7 +250,7 @@ def render_single_category(cat_key, cat_title, default_df):
                 st.error(f"Lỗi đọc file: {e}")
 
     # -------------------------------------------------------------------------
-    # KHU VỰC 2: QUẢN LÝ CỘT TIÊU ĐỀ (THÊM / SỬA / XÓA CỘT)
+    # KHU VỰC 2: QUẢN LÝ CỘT TIÊU ĐỀ
     # -------------------------------------------------------------------------
     with st.expander(
         "🛠️ QUẢN LÝ CỘT TIÊU ĐỀ CỦA BẢNG (THÊM / SỬA / XÓA CỘT)", expanded=False
@@ -203,13 +338,10 @@ def render_single_category(cat_key, cat_title, default_df):
         ):
             st.session_state[session_key] = edited_df
             if save_category_data(cat_key, edited_df):
-                st.success(
-                    f"✅ Dữ liệu danh mục '{cat_title}' đã được lưu thành công!"
-                )
+                st.success(f"✅ Dữ liệu danh mục đã được lưu vĩnh viễn!")
 
     with col_reload:
         if st.button("🔄 Tải lại dữ liệu", key=f"btn_reload_{cat_key}"):
-            # Xóa cache bộ nhớ của data_editor để buộc Streamlit load dữ liệu mới nhất
             if editor_key in st.session_state:
                 del st.session_state[editor_key]
             st.session_state[session_key] = load_category_data(
@@ -220,133 +352,109 @@ def render_single_category(cat_key, cat_title, default_df):
 
 
 # -----------------------------------------------------------------------------
-# HÀM CHÍNH - HIỂN THỊ ĐẦY ĐỦ CÁC TAB DANH MỤC
+# HÀM CHÍNH - QUẢN LÝ DANH SÁCH TẤT CẢ DANH MỤC
 # -----------------------------------------------------------------------------
 def render_category_management():
     st.subheader("Chi tiết danh mục hệ thống")
 
-    # Tạo 5 Tab điều hướng danh mục
-    tabs = st.tabs([
-        "📌 Chức danh & Mã ngạch",
-        "🎓 Trình độ chuyên môn",
-        "📝 Loại Hợp đồng Lao động",
-        "💰 Danh mục Phụ cấp / Lương",
-        "🏛️ Ngạch bậc lương cơ bản",
-    ])
+    # Load danh sách danh mục hiện có
+    cat_list = load_category_list()
 
-    # Tab 1: Chức danh & Mã ngạch
-    with tabs[0]:
-        df_chuc_danh = pd.DataFrame({
-            "Mã CĐ": ["BS", "BSCK1", "BSCK2", "ĐĐ", "KTV", "DS"],
-            "Tên Chức Danh": [
-                "Bác sĩ",
-                "Bác sĩ CKI",
-                "Bác sĩ CKII",
-                "Điều dưỡng",
-                "Kỹ thuật viên",
-                "Dược sĩ",
-            ],
-            "Mã Ngạch": [
-                "V.08.01.03",
-                "V.08.01.02",
-                "V.08.01.01",
-                "V.08.05.12",
-                "V.08.07.23",
-                "V.08.08.20",
-            ],
-            "Ghi chú": [
-                "Lâm sàng",
-                "Chuyên khoa 1",
-                "Chuyên khoa 2",
-                "Chăm sóc",
-                "Cận lâm sàng",
-                "Khoa Dược",
-            ],
-        })
-        render_single_category(
-            "chuc_danh", "Chức danh & Mã ngạch", df_chuc_danh
+    # =========================================================================
+    # CHỨC NĂNG MỚI: QUẢN LÝ DANH SÁCH DANH MỤC (THÊM / ĐỔI TÊN / XÓA TAB)
+    # =========================================================================
+    with st.expander(
+        "⚙️ QUẢN LÝ DANH SÁCH DANH MỤC (THÊM / ĐỔI TÊN / XÓA TAB DANH MỤC)",
+        expanded=False,
+    ):
+        col_cat_add, col_cat_edit, col_cat_del = st.columns(3)
+
+        # 1. THÊM TAB DANH MỤC MỚI
+        with col_cat_add:
+            st.markdown("**➕ Thêm danh mục mới**")
+            new_cat_title = st.text_input(
+                "Tên danh mục mới:", key="input_new_cat_title"
+            )
+            if st.button("Tạo Danh mục Mới", key="btn_create_cat"):
+                if new_cat_title:
+                    import re
+
+                    new_key = re.sub(
+                        r"\W+", "_", new_cat_title.lower()
+                    ).strip("_")
+                    if not new_key:
+                        new_key = f"cat_{len(cat_list) + 1}"
+
+                    cat_list[new_key] = f"📁 {new_cat_title}"
+                    save_category_list(cat_list)
+
+                    # Tạo dataframe rỗng mẫu cho danh mục mới
+                    init_df = pd.DataFrame({
+                        "Mã": ["M01"],
+                        "Tên " + new_cat_title: ["Nội dung 01"],
+                        "Ghi chú": [""],
+                    })
+                    save_category_data(new_key, init_df)
+
+                    st.success(f"Đã tạo danh mục '{new_cat_title}'!")
+                    st.rerun()
+
+        # 2. ĐỔI TÊN TAB DANH MỤC
+        with col_cat_edit:
+            st.markdown("**✏️ Đổi tên danh mục**")
+            selected_edit_key = st.selectbox(
+                "Chọn danh mục đổi tên:",
+                options=list(cat_list.keys()),
+                format_func=lambda x: cat_list[x],
+                key="sel_edit_cat",
+            )
+            renamed_cat_title = st.text_input(
+                "Tên mới danh mục:", key="input_rename_cat_title"
+            )
+            if st.button("Cập nhật Tên", key="btn_rename_cat"):
+                if renamed_cat_title and selected_edit_key:
+                    cat_list[selected_edit_key] = renamed_cat_title
+                    save_category_list(cat_list)
+                    st.success("Đã đổi tên danh mục thành công!")
+                    st.rerun()
+
+        # 3. XÓA TAB DANH MỤC
+        with col_cat_del:
+            st.markdown("**🗑️ Xóa danh mục**")
+            selected_del_key = st.selectbox(
+                "Chọn danh mục cần xóa:",
+                options=list(cat_list.keys()),
+                format_func=lambda x: cat_list[x],
+                key="sel_del_cat",
+            )
+            if st.button(
+                "Xóa Danh Mục Này", type="primary", key="btn_delete_cat"
+            ):
+                if selected_del_key in cat_list:
+                    del cat_list[selected_del_key]
+                    save_category_list(cat_list)
+                    st.success("Đã xóa danh mục khỏi hệ thống!")
+                    st.rerun()
+
+    st.write("")
+
+    # =========================================================================
+    # HIỂN THỊ ĐỘNG CÁC TAB THEO DANH SÁCH DANH MỤC
+    # =========================================================================
+    if not cat_list:
+        st.info(
+            "Chưa có danh mục nào. Hãy bấm '⚙️ QUẢN LÝ DANH SÁCH DANH MỤC' ở trên để thêm mới."
         )
+        return
 
-    # Tab 2: Trình độ chuyên môn
-    with tabs[1]:
-        df_trinh_do = pd.DataFrame({
-            "Mã TĐ": ["TS", "ThS", "BSCKII", "BSCKI", "CN", "CĐ", "TC"],
-            "Tên Trình độ": [
-                "Tiến sĩ",
-                "Thạc sĩ",
-                "Bác sĩ Chuyên khoa II",
-                "Bác sĩ Chuyên khoa I",
-                "Cử nhân / Đại học",
-                "Cao đẳng",
-                "Trung cấp",
-            ],
-            "Ghi chú": [
-                "Sau đại học",
-                "Sau đại học",
-                "Sau đại học",
-                "Sau đại học",
-                "Đại học",
-                "Cao đẳng",
-                "Trung cấp",
-            ],
-        })
-        render_single_category("trinh_do", "Trình độ chuyên môn", df_trinh_do)
+    cat_keys = list(cat_list.keys())
+    cat_titles = [cat_list[k] for k in cat_keys]
 
-    # Tab 3: Loại Hợp đồng Lao động
-    with tabs[2]:
-        df_hop_dong = pd.DataFrame({
-            "Mã HĐ": ["KTH", "12T", "36T", "TV"],
-            "Tên Loại Hợp đồng": [
-                "HĐLĐ Không xác định thời hạn",
-                "HĐLĐ Xác định thời hạn 12 tháng",
-                "HĐLĐ Xác định thời hạn 36 tháng",
-                "Hợp đồng Thử việc",
-            ],
-            "Thời hạn (Tháng)": ["Vô thời hạn", "12", "36", "02"],
-            "Ghi chú": ["Chính thức", "Chính thức", "Chính thức", "Thử việc"],
-        })
-        render_single_category(
-            "loai_hop_dong", "Loại Hợp đồng Lao động", df_hop_dong
-        )
+    tabs = st.tabs(cat_titles)
 
-    # Tab 4: Danh mục Phụ cấp / Lương
-    with tabs[3]:
-        df_phu_cap = pd.DataFrame({
-            "Mã PC": ["PC_CV", "PC_UD", "PC_TN", "PC_DH"],
-            "Tên Loại Phụ cấp": [
-                "Phụ cấp Chức vụ",
-                "Phụ cấp Ưu đãi nghề Y tế",
-                "Phụ cấp Thâm niên",
-                "Phụ cấp Độc hại / Nguy hiểm",
-            ],
-            "Tỷ lệ / Mức hưởng": ["0.4", "40%", "10%", "0.2"],
-            "Ghi chú": [
-                "Trưởng/Phó khoa",
-                "Cán bộ y tế",
-                "Trên 5 năm",
-                "Môi trường độc hại",
-            ],
-        })
-        render_single_category(
-            "phu_cap", "Danh mục Phụ cấp / Lương", df_phu_cap
-        )
-
-    # Tab 5: Ngạch bậc lương cơ bản
-    with tabs[4]:
-        df_ngach_luong = pd.DataFrame({
-            "Mã Ngạch": ["V.08.01.01", "V.08.01.02", "V.08.01.03", "V.08.05.12"],
-            "Tên Ngạch lương": [
-                "Bác sĩ cao cấp (Hạng I)",
-                "Bác sĩ chính (Hạng II)",
-                "Bác sĩ (Hạng III)",
-                "Điều dưỡng (Hạng III)",
-            ],
-            "Hệ số Bậc 1": ["6.20", "4.40", "2.34", "2.34"],
-            "Bậc tối đa": ["8", "8", "12", "12"],
-        })
-        render_single_category(
-            "ngach_luong", "Ngạch bậc lương cơ bản", df_ngach_luong
-        )
+    for idx, key in enumerate(cat_keys):
+        with tabs[idx]:
+            render_single_category(key, cat_list[key])
 
 
 if __name__ == "__main__":
