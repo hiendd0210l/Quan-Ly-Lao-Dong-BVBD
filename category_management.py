@@ -1,268 +1,217 @@
+import os
 import pandas as pd
 import streamlit as st
 
+# Tên file lưu trữ dữ liệu vĩnh viễn (CSDL dạng CSV)
+DATA_FILE = "danh_muc_chuc_danh.csv"
 
-def init_categories():
-    """Khởi tạo dữ liệu danh mục mặc định nếu chưa có trong session_state."""
-    if "categories" not in st.session_state:
-        st.session_state["categories"] = {
-            "Chức danh & Mã ngạch": pd.DataFrame([
-                {
-                    "Mã CD": "BS",
-                    "Tên Chức Danh": "Bác sĩ",
-                    "Mạch Ngạch": "V.08.01.03",
-                    "Ghi chú": "Lâm sàng",
-                },
-                {
-                    "Mã CD": "BSCK1",
-                    "Tên Chức Danh": "Bác sĩ CKI",
-                    "Mạch Ngạch": "V.08.01.02",
-                    "Ghi chú": "Chuyên khoa 1",
-                },
-                {
-                    "Mã CD": "BSCK2",
-                    "Tên Chức Danh": "Bác sĩ CKII",
-                    "Mạch Ngạch": "V.08.01.01",
-                    "Ghi chú": "Chuyên khoa 2",
-                },
-                {
-                    "Mã CD": "DD",
-                    "Tên Chức Danh": "Điều dưỡng",
-                    "Mạch Ngạch": "V.08.05.12",
-                    "Ghi chú": "Chăm sóc",
-                },
-                {
-                    "Mã CD": "KTV",
-                    "Tên Chức Danh": "Kỹ thuật viên",
-                    "Mạch Ngạch": "V.08.07.23",
-                    "Ghi chú": "Cận lâm sàng",
-                },
-                {
-                    "Mã CD": "DS",
-                    "Tên Chức Danh": "Dược sĩ",
-                    "Mạch Ngạch": "V.08.08.26",
-                    "Ghi chú": "Khoa Dược",
-                },
-            ]),
-            "Trình độ chuyên môn": pd.DataFrame([
-                {
-                    "Mã TRD": "TD01",
-                    "Tên Trình Độ": "Tiến sĩ Y khoa",
-                    "Cấp Bằng": "Đại học",
-                },
-                {
-                    "Mã TRD": "TD02",
-                    "Tên Trình Độ": "Thạc sĩ Y khoa",
-                    "Cấp Bằng": "Đại học",
-                },
-                {
-                    "Mã TRD": "TD03",
-                    "Tên Trình Độ": "Bác sĩ Chuyên khoa II",
-                    "Cấp Bằng": "Sau đại học",
-                },
-                {
-                    "Mã TRD": "TD04",
-                    "Tên Trình Độ": "Bác sĩ Chuyên khoa I",
-                    "Cấp Bằng": "Sau đại học",
-                },
-                {
-                    "Mã TRD": "TD05",
-                    "Tên Trình Độ": "Đại học Điều dưỡng",
-                    "Cấp Bằng": "Đại học",
-                },
-                {
-                    "Mã TRD": "TD06",
-                    "Tên Trình Độ": "Cao đẳng Kỹ thuật",
-                    "Cấp Bằng": "Cao đẳng",
-                },
-            ]),
-            "Loại Hợp đồng Lao động": pd.DataFrame([
-                {
-                    "Mã HĐ": "HD01",
-                    "TenLoaiHD": "Hợp đồng không xác định thời hạn",
-                    "Thời hạn (tháng)": "Vĩnh viễn",
-                },
-                {
-                    "Mã HĐ": "HD02",
-                    "TenLoaiHD": "Hợp đồng xác định thời hạn 12-36 tháng",
-                    "Thời hạn (tháng)": "12-36",
-                },
-                {
-                    "Mã HĐ": "HD03",
-                    "TenLoaiHD": "Hợp đồng thử việc",
-                    "Thời hạn (tháng)": "02",
-                },
-            ]),
-            "Danh mục Phụ cấp Y tế": pd.DataFrame([
-                {
-                    "Mã PC": "PC01",
-                    "Tên Phụ cấp": "Phụ cấp Ưu đãi nghề",
-                    "Mức hưởng (%)": "40% - 70%",
-                },
-                {
-                    "Mã PC": "PC02",
-                    "Tên Phụ cấp": "Phụ cấp Độc hại nguy hiểm",
-                    "Mức hưởng (%)": "0.1 - 0.4",
-                },
-                {
-                    "Mã PC": "PC03",
-                    "Tên Phụ cấp": "Phụ cấp Trực 24/24",
-                    "Mức hưởng (%)": "Theo ca trực",
-                },
-            ]),
-            "Ngạch bậc lương cơ bản": pd.DataFrame([
-                {"Mã": "01", "Tên giá trị": "Mẫu mặc định", "Ghi chú": ""}
-            ]),
-        }
+# Danh sách cột chuẩn của Bảng
+DEFAULT_COLUMNS = ["Mã CĐ", "Tên Chức Danh", "Mã Ngạch", "Ghi Chú"]
+
+
+# 1. Hàm nạp dữ liệu từ ổ đĩa/CSDL
+def load_data():
+    if os.path.exists(DATA_FILE):
+        try:
+            df = pd.read_csv(DATA_FILE)
+            # Đảm bảo các cột tối thiểu luôn tồn tại
+            for col in DEFAULT_COLUMNS:
+                if col not in df.columns:
+                    df[col] = ""
+            return df
+        except Exception as e:
+            st.error(f"Lỗi đọc file dữ liệu: {e}")
+
+    # Dữ liệu mặc định ban đầu nếu chưa có file dữ liệu
+    return pd.DataFrame({
+        "Mã CĐ": ["BS", "BSCK1", "BSCK2", "ĐĐ", "KTV", "DS"],
+        "Tên Chức Danh": [
+            "Bác sĩ",
+            "Bác sĩ CKI",
+            "Bác sĩ CKII",
+            "Điều dưỡng",
+            "Kỹ thuật viên",
+            "Dược sĩ",
+        ],
+        "Mã Ngạch": [
+            "V.08.01.03",
+            "V.08.01.02",
+            "V.08.01.01",
+            "V.08.05.12",
+            "V.08.07.23",
+            "V.08.08.20",
+        ],
+        "Ghi Chú": [
+            "Lâm sàng",
+            "Chuyên khoa 1",
+            "Chuyên khoa 2",
+            "Chăm sóc",
+            "Cận lâm sàng",
+            "Phân Dược",
+        ],
+    })
+
+
+# 2. Hàm lưu dữ liệu bền vững xuống ổ đĩa
+def save_data(df):
+    try:
+        df.to_csv(DATA_FILE, index=False, encoding="utf-8-sig")
+        return True
+    except Exception as e:
+        st.error(f"Không thể lưu dữ liệu: {e}")
+        return False
 
 
 def render_category_management():
-    """Giao diện Quản lý Danh mục Hệ thống Dùng chung hỗ trợ tùy chỉnh Cột động."""
-    init_categories()
+    st.title("⚙️ QUẢN LÝ DANH MỤC HỆ THỐNG")
 
-    st.subheader("⚙️ QUẢN LÝ DANH MỤC HỆ THỐNG DÙNG CHUNG")
-    st.caption(
-        "Khai báo linh hoạt danh mục, thêm/bớt cột tiêu đề và chỉnh sửa các dòng dữ liệu."
-    )
+    # Khởi tạo state dữ liệu nếu chưa có
+    if "df_chuc_danh" not in st.session_state:
+        st.session_state["df_chuc_danh"] = load_data()
 
     # -------------------------------------------------------------------------
-    # 1. QUẢN LÝ TÊN DANH MỤC LỚN (THÊM / XÓA DANH MỤC)
+    # KHU VỰC 1: QUẢN LÝ CỘT TIÊU ĐỀ (THÊM / SỬA / XÓA CỘT)
     # -------------------------------------------------------------------------
-    with st.expander("🛠️ **QUẢN LÝ DANH MỤC LỚN (THÊM / XÓA DANH MỤC)**"):
-        col_c1, col_c2 = st.columns([3, 2])
+    with st.expander("🛠️ QUẢN LÝ CỘT TIÊU ĐỀ CỦA BẢNG (THÊM / SỬA / XÓA CỘT)"):
+        col_add, col_edit, col_del = st.columns(3)
 
-        with col_c1:
-            new_cat_name = st.text_input("➕ Nhập tên Danh mục mới muốn thêm:")
-            if st.button("Tạo Danh mục mới"):
-                if not new_cat_name.strip():
-                    st.warning("Vui lòng nhập tên danh mục!")
-                elif new_cat_name in st.session_state["categories"]:
-                    st.warning("Danh mục này đã tồn tại!")
+        # Thêm cột
+        with col_add:
+            st.markdown("**➕ Thêm cột mới**")
+            new_col_name = st.text_input(
+                "Nhập tên cột mới:", key="input_new_col"
+            )
+            if st.button("Thêm cột"):
+                if new_col_name:
+                    if new_col_name not in st.session_state["df_chuc_danh"].columns:
+                        st.session_state["df_chuc_danh"][new_col_name] = ""
+                        save_data(st.session_state["df_chuc_danh"])
+                        st.success(f"Đã thêm cột '{new_col_name}'")
+                        st.rerun()
+                    else:
+                        st.warning("Tên cột đã tồn tại!")
                 else:
-                    st.session_state["categories"][new_cat_name] = pd.DataFrame(
-                        [{"Mã": "01", "Tên giá trị": "Mẫu mặc định", "Ghi chú": ""}]
+                    st.warning("Vui lòng nhập tên cột!")
+
+        # Đổi tên cột
+        with col_edit:
+            st.markdown("**✏️ Đổi tên cột tiêu đề**")
+            cols_list = list(st.session_state["df_chuc_danh"].columns)
+            selected_col_rename = st.selectbox(
+                "Chọn cột cần đổi tên:", cols_list, key="select_col_rename"
+            )
+            renamed_title = st.text_input(
+                "Nhập tên mới:", key="input_renamed_title"
+            )
+            if st.button("Đổi tên"):
+                if renamed_title and selected_col_rename:
+                    st.session_state["df_chuc_danh"] = (
+                        st.session_state["df_chuc_danh"].rename(
+                            columns={selected_col_rename: renamed_title}
+                        )
                     )
-                    st.success(f"Đã tạo danh mục '{new_cat_name}' thành công!")
+                    save_data(st.session_state["df_chuc_danh"])
+                    st.success("Đã đổi tên cột thành công!")
                     st.rerun()
 
-        with col_c2:
-            delete_cat_name = st.selectbox(
-                "🗑️ Chọn Danh mục muốn xóa:",
-                options=list(st.session_state["categories"].keys()),
+        # Xóa cột
+        with col_del:
+            st.markdown("**🗑️ Xóa cột khỏi bảng**")
+            selected_col_delete = st.selectbox(
+                "Chọn cột cần xóa:", cols_list, key="select_col_delete"
             )
-            if st.button("❌ Xóa Danh mục chọn", type="primary"):
-                if len(st.session_state["categories"]) <= 1:
-                    st.error("Hệ thống phải duy trì ít nhất 01 danh mục!")
-                else:
-                    del st.session_state["categories"][delete_cat_name]
-                    st.success(f"Đã xóa danh mục '{delete_cat_name}'!")
+            if st.button("Xóa cột", type="primary"):
+                if selected_col_delete in st.session_state["df_chuc_danh"].columns:
+                    st.session_state["df_chuc_danh"] = st.session_state[
+                        "df_chuc_danh"
+                    ].drop(columns=[selected_col_delete])
+                    save_data(st.session_state["df_chuc_danh"])
+                    st.success(f"Đã xóa cột '{selected_col_delete}'")
                     st.rerun()
 
     st.divider()
 
     # -------------------------------------------------------------------------
-    # 2. CHỈNH SỬA CHI TIẾT BẢNG VÀ CẤU TRÚC CỘT TIÊU ĐỀ
+    # KHU VỰC 2: NHẬP DỮ LIỆU HÀNG LOẠT TỪ FILE EXCEL
     # -------------------------------------------------------------------------
-    category_names = list(st.session_state["categories"].keys())
+    with st.expander(
+        "📊 CẬP NHẬT / NHẬP HÀNG LOẠT TỪ FILE EXCEL (.XLSX, .XLS)", expanded=False
+    ):
+        st.markdown(
+            "Tải lên file Excel chứa danh sách chức danh để nhập hoặc cập nhật hàng loạt vào hệ thống."
+        )
 
-    if not category_names:
-        st.info("Chưa có danh mục nào được khởi tạo.")
-        return
+        uploaded_excel = st.file_uploader(
+            "Chọn file Excel",
+            type=["xlsx", "xls"],
+            help="File Excel nên có các cột tiêu đề tương ứng với bảng",
+        )
 
-    tabs = st.tabs([f"📌 {name}" for name in category_names])
+        col_opt1, col_opt2 = st.columns([2, 2])
+        import_mode = col_opt1.radio(
+            "Chế độ nhập:",
+            ["Nối tiếp vào bảng hiện tại", "Ghi đè toàn bộ bảng cũ"],
+            horizontal=True,
+        )
 
-    for idx, name in enumerate(category_names):
-        with tabs[idx]:
-            st.write(f"### Chi tiết danh mục: **{name}**")
-            df_cat = st.session_state["categories"][name]
+        if uploaded_excel is not None:
+            try:
+                df_excel = pd.read_excel(uploaded_excel)
+                st.markdown("**Bản xem trước dữ liệu từ Excel:**")
+                st.dataframe(df_excel.head(5), use_container_width=True)
 
-            # Quản lý Cột tiêu đề (Thêm / Đổi tên / Xóa cột)
-            with st.expander("📐 **QUẢN LÝ CỘT TIÊU ĐỀ CỦA BẢNG (THÊM / SỬA / XÓA CỘT)**", expanded=False):
-                c_add, c_rename, c_del = st.columns(3)
+                if st.button("🚀 Tiến hành Cập nhật dữ liệu từ Excel"):
+                    if import_mode == "Ghi đè toàn bộ bảng cũ":
+                        st.session_state["df_chuc_danh"] = df_excel
+                    else:
+                        st.session_state["df_chuc_danh"] = pd.concat(
+                            [st.session_state["df_chuc_danh"], df_excel],
+                            ignore_index=True,
+                        ).drop_duplicates()
 
-                # --- 1. Thêm cột mới ---
-                with c_add:
-                    st.markdown("**➕ Thêm cột mới**")
-                    new_col_name = st.text_input(
-                        "Nhập tên cột mới:", key=f"input_add_col_{name}"
-                    )
-                    if st.button("Thêm cột", key=f"btn_add_col_{name}"):
-                        if not new_col_name.strip():
-                            st.warning("Vui lòng nhập tên cột!")
-                        elif new_col_name in df_cat.columns:
-                            st.warning("Cột này đã có trong bảng!")
-                        else:
-                            st.session_state["categories"][name][new_col_name] = ""
-                            st.success(f"Đã thêm cột '{new_col_name}' thành công!")
-                            st.rerun()
+                    if save_data(st.session_state["df_chuc_danh"]):
+                        st.success(
+                            f"🎉 Đã nhập thành công dữ liệu từ file Excel và lưu vĩnh viễn vào hệ thống!"
+                        )
+                        st.rerun()
+            except Exception as e:
+                st.error(f"Lỗi đọc file Excel: {e}")
 
-                # --- 2. Đổi tên cột ---
-                with c_rename:
-                    st.markdown("**✏️ Đổi tên cột tiêu đề**")
-                    col_to_rename = st.selectbox(
-                        "Chọn cột cần đổi tên:",
-                        options=list(df_cat.columns),
-                        key=f"select_rename_col_{name}",
-                    )
-                    renamed_col_name = st.text_input(
-                        "Nhập tên mới:", key=f"input_rename_col_{name}"
-                    )
-                    if st.button("Đổi tên", key=f"btn_rename_col_{name}"):
-                        if not renamed_col_name.strip():
-                            st.warning("Vui lòng nhập tên cột mới!")
-                        elif renamed_col_name in df_cat.columns:
-                            st.warning("Tên cột mới trùng với cột đã tồn tại!")
-                        else:
-                            st.session_state["categories"][name] = (
-                                st.session_state["categories"][name].rename(
-                                    columns={col_to_rename: renamed_col_name}
-                                )
-                            )
-                            st.success(f"Đã đổi tên cột '{col_to_rename}' ➔ '{renamed_col_name}'!")
-                            st.rerun()
+    st.divider()
 
-                # --- 3. Xóa cột ---
-                with c_del:
-                    st.markdown("**🗑️ Xóa cột khỏi bảng**")
-                    col_to_delete = st.selectbox(
-                        "Chọn cột cần xóa:",
-                        options=list(df_cat.columns),
-                        key=f"select_del_col_{name}",
-                    )
-                    if st.button("Xóa cột", key=f"btn_del_col_{name}", type="primary"):
-                        if len(df_cat.columns) <= 1:
-                            st.error("Bảng phải giữ lại ít nhất 01 cột!")
-                        else:
-                            st.session_state["categories"][name] = (
-                                st.session_state["categories"][name].drop(
-                                    columns=[col_to_delete]
-                                )
-                            )
-                            st.success(f"Đã xóa cột '{col_to_delete}'!")
-                            st.rerun()
+    # -------------------------------------------------------------------------
+    # KHU VỰC 3: BẢNG CHỈNH SỬA VÀ NÚT LƯU VĨNH VIỄN
+    # -------------------------------------------------------------------------
+    st.subheader("📋 DANH MỤC CHỨC DANH VÀ MÃ NGẠCH")
+    st.caption("💡 Chỉnh sửa trực tiếp trên bảng bên dưới, sau đó bấm nút Lưu.")
 
-            st.caption("💡 *Kích đôi vào ô để sửa nội dung, hoặc thêm/xóa dòng dữ liệu trực tiếp trên bảng bên dưới:*")
+    # Cho phép chỉnh sửa bảng và thêm/xóa hàng linh hoạt
+    edited_df = st.data_editor(
+        st.session_state["df_chuc_danh"],
+        use_container_width=True,
+        num_rows="dynamic",
+        key="editor_chuc_danh",
+    )
 
-            # Bảng chỉnh sửa dữ liệu
-            edited_df = st.data_editor(
-                st.session_state["categories"][name],
-                num_rows="dynamic",
-                use_container_width=True,
-                key=f"editor_{name}",
-            )
+    col_save, col_reset = st.columns([3, 1])
 
-            # Nút Lưu thay đổi
-            c_save, _ = st.columns([1, 5])
-            with c_save:
-                if st.button(f"💾 Lưu danh mục {name}", key=f"btn_save_{name}"):
-                    st.session_state["categories"][name] = edited_df
-                    st.success(f"Đã lưu dữ liệu cho danh mục '{name}'!")
-                    st.rerun()
+    with col_save:
+        if st.button(
+            "💾 Lưu danh mục Chức danh & Mã ngạch vĩnh viễn", type="primary"
+        ):
+            # 1. Cập nhật vào Session State
+            st.session_state["df_chuc_danh"] = edited_df
+            # 2. Lưu trực tiếp xuống ổ đĩa / CSDL
+            if save_data(edited_df):
+                st.success(
+                    "✅ Dữ liệu đã được lưu vĩnh viễn! Lần sau truy cập sẽ không bị mất."
+                )
+
+    with col_reset:
+        if st.button("🔄 Tải lại dữ liệu từ CSDL"):
+            st.session_state["df_chuc_danh"] = load_data()
+            st.rerun()
 
 
-def get_category_data(category_name):
-    """Hàm hỗ trợ lấy dữ liệu danh mục để sử dụng ở các mô-đun khác."""
-    init_categories()
-    if category_name in st.session_state["categories"]:
-        return st.session_state["categories"][category_name]
-    return pd.DataFrame()
+if __name__ == "__main__":
+    render_category_management()
