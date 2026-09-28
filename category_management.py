@@ -154,7 +154,7 @@ def save_category_data(cat_key, df):
 
 
 # =============================================================================
-# HÀM TỰ ĐỘNG TÍNH TOÁN KÍCH THƯỚC CỘT (AUTO SIZE CO GIÃN THEO CHỮ)
+# HÀM BỎ SỬ DỤNG DẠNG OBJECT JSON NGUY HIỂM - CHỈ CẤU HÌNH KÍCH THƯỚC CHIỀU RỘNG CHUẨN
 # =============================================================================
 def build_column_auto_size_config(df):
     column_config = {}
@@ -163,9 +163,9 @@ def build_column_auto_size_config(df):
         max_len = max(
             df[col].astype(str).map(len).max() if not df.empty else 0, len(str(col))
         )
-        # Quy đổi độ dài ký tự sang độ rộng pixel (mỗi ký tự ~ 11px + padding 40px)
-        calc_width = max(110, min(max_len * 11 + 45, 500))
-        column_config[col] = st.column_config.Column(
+        # Tính chiều rộng pixel tương ứng
+        calc_width = max(120, min(max_len * 11 + 40, 500))
+        column_config[col] = st.column_config.TextColumn(
             label=str(col), width=calc_width
         )
     return column_config
@@ -322,21 +322,17 @@ def render_single_category(cat_key, cat_title):
                     st.rerun()
 
     # -------------------------------------------------------------------------
-    # HIỂN THỊ BẢNG DỮ LIỆU ĐÃ ĐƯỢC TỰ ĐỘNG TÍNH TOÁN KÍCH THƯỚC CỘT (AUTO-SIZE)
+    # BẢNG DỮ LIỆU ĐÃ ĐƯỢC TỰ ĐỘNG CÂN BẰNG CHIỀU RỘNG (AUTO-SIZE)
     # -------------------------------------------------------------------------
     st.write("")
     st.caption("💡 Các cột đã được Auto Size vừa vặn văn bản:")
 
-    # Tính toán kích thước tự động cho các cột
-    auto_column_configs = build_column_auto_size_config(
-        st.session_state[session_key]
-    )
+    auto_configs = build_column_auto_size_config(st.session_state[session_key])
 
-    # st.data_editor với use_container_width=False giúp chiều rộng pixel vừa khít hoạt động!
     edited_df = st.data_editor(
         st.session_state[session_key],
         use_container_width=False,
-        column_config=auto_column_configs,
+        column_config=auto_configs,
         num_rows="dynamic",
         key=editor_key,
     )
