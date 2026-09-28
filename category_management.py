@@ -2,6 +2,8 @@ import json
 import os
 import pandas as pd
 import streamlit as st
+# [BƯỚC 2] Import thư viện AgGrid
+from st_aggrid import AgGrid, ColumnsAutoSizeMode, GridOptionsBuilder
 
 # Thư mục lưu dữ liệu vĩnh viễn
 DATA_DIR = "data_categories"
@@ -114,7 +116,6 @@ DEFAULT_CATEGORIES = {
 }
 
 
-# 1. Hàm nạp danh sách cấu hình các danh mục
 def load_category_list():
     if os.path.exists(CONFIG_FILE):
         try:
@@ -122,7 +123,6 @@ def load_category_list():
                 return json.load(f)
         except Exception:
             pass
-    # Mặc định tạo danh sách ban đầu
     initial_list = {
         cat_key: item["title"] for cat_key, item in DEFAULT_CATEGORIES.items()
     }
@@ -135,7 +135,6 @@ def save_category_list(cat_dict):
         json.dump(cat_dict, f, ensure_ascii=False, indent=2)
 
 
-# 2. Hàm nạp dữ liệu từ file CSV
 def load_category_data(cat_key, default_df):
     file_path = os.path.join(DATA_DIR, f"{cat_key}.csv")
     if os.path.exists(file_path):
@@ -146,7 +145,6 @@ def load_category_data(cat_key, default_df):
     return default_df
 
 
-# 3. Hàm lưu dữ liệu CSV vĩnh viễn
 def save_category_data(cat_key, df):
     file_path = os.path.join(DATA_DIR, f"{cat_key}.csv")
     try:
@@ -157,27 +155,56 @@ def save_category_data(cat_key, df):
         return False
 
 
-# 4. Giao diện quản lý nội dung của từng Danh mục cụ thể
+# =============================================================================
+# [BƯỚC 3] HÀM HIỂN THỊ BẢNG AGGRID VỚI TÍNH NĂNG AUTO SIZE CỘT
+# =============================================================================
+def render_aggrid_table(df, key_prefix):
+    gb = GridOptionsBuilder.from_dataframe(df)
+
+    # Cấu hình tính năng chỉnh sửa, lọc, sắp xếp, kéo mép cột
+    gb.configure_default_column(
+        resizable=True,
+        filterable=True,
+        sortable=True,
+        editable=True,
+    )
+
+    gridOptions = gb.build()
+
+    # Hiển thị bảng với tính năng tự động vừa văn bản (FIT_CONTENTS)
+    grid_response = AgGrid(
+        df,
+        gridOptions=gridOptions,
+        columns_auto_size_mode=ColumnsAutoSizeMode.FIT_CONTENTS,  # Auto Size độ rộng cột
+        update_mode="MODEL_CHANGED",
+        data_return_mode="FILTERED_AND_SORTED",
+        fit_columns_on_grid_load=False,
+        height=350,
+        theme="streamlit",
+        key=f"grid_{key_prefix}",
+    )
+
+    # Lấy dữ liệu DataFrame đã chỉnh sửa trả về
+    updated_df = pd.DataFrame(grid_response["data"])
+    return updated_df
+
+
+# Giao diện quản lý nội dung của từng Danh mục
 def render_single_category(cat_key, cat_title):
     session_key = f"df_{cat_key}"
-    editor_key = f"editor_{cat_key}"
 
-    # Lấy dataframe mặc định nếu có
     default_df = pd.DataFrame(
         {"Mã": ["M01"], "Tên danh mục": ["Mẫu 01"], "Ghi chú": [""]}
     )
     if cat_key in DEFAULT_CATEGORIES:
         default_df = DEFAULT_CATEGORIES[cat_key]["df"]
 
-    # Khởi tạo dữ liệu vào session state
     if session_key not in st.session_state:
         st.session_state[session_key] = load_category_data(
             cat_key, default_df
         )
 
-    # -------------------------------------------------------------------------
-    # KHU VỰC 1: NHẬP / XUẤT EXCEL MẪU
-    # -------------------------------------------------------------------------
+    # 1. KHU VỰC NHẬP / XUẤT EXCEL MẪU
     with st.expander(
         "📊 NHẬP DỮ LIỆU TỪ EXCEL / TẢI FILE EXCEL MẪU", expanded=False
     ):
@@ -227,8 +254,6 @@ def render_single_category(cat_key, cat_title):
                         save_category_data(
                             cat_key, st.session_state[session_key]
                         )
-                        if editor_key in st.session_state:
-                            del st.session_state[editor_key]
                         st.success("✅ Đã cập nhật thành công!")
                         st.rerun()
 
@@ -242,16 +267,12 @@ def render_single_category(cat_key, cat_title):
                         save_category_data(
                             cat_key, st.session_state[session_key]
                         )
-                        if editor_key in st.session_state:
-                            del st.session_state[editor_key]
                         st.success("✅ Đã ghi đè dữ liệu thành công!")
                         st.rerun()
             except Exception as e:
                 st.error(f"Lỗi đọc file: {e}")
 
-    # -------------------------------------------------------------------------
-    # KHU VỰC 2: QUẢN LÝ CỘT TIÊU ĐỀ
-    # -------------------------------------------------------------------------
+    # 2. KHU VỰC QUẢN LÝ CỘT TIÊU ĐỀ
     with st.expander(
         "🛠️ QUẢN LÝ CỘT TIÊU ĐỀ CỦA BẢNG (THÊM / SỬA / XÓA CỘT)", expanded=False
     ):
@@ -269,8 +290,6 @@ def render_single_category(cat_key, cat_title):
                 ):
                     st.session_state[session_key][new_col] = ""
                     save_category_data(cat_key, st.session_state[session_key])
-                    if editor_key in st.session_state:
-                        del st.session_state[editor_key]
                     st.success(f"Đã thêm cột '{new_col}'")
                     st.rerun()
 
@@ -289,8 +308,6 @@ def render_single_category(cat_key, cat_title):
                         session_key
                     ].rename(columns={col_to_rename: renamed_name})
                     save_category_data(cat_key, st.session_state[session_key])
-                    if editor_key in st.session_state:
-                        del st.session_state[editor_key]
                     st.success("Đã đổi tên cột thành công!")
                     st.rerun()
 
@@ -308,25 +325,19 @@ def render_single_category(cat_key, cat_title):
                         session_key
                     ].drop(columns=[col_to_del])
                     save_category_data(cat_key, st.session_state[session_key])
-                    if editor_key in st.session_state:
-                        del st.session_state[editor_key]
                     st.success(f"Đã xóa cột '{col_to_del}'")
                     st.rerun()
 
     # -------------------------------------------------------------------------
-    # KHU VỰC 3: BẢNG DỮ LIỆU CHỈNH SỬA & LƯU / TẢI LẠI
+    # [BƯỚC 4] TÍCH HỢP HÀM BẢNG AGGRID AUTO SIZE VÀO GIAO DIỆN
     # -------------------------------------------------------------------------
     st.write("")
     st.caption(
-        "💡 Thêm/Xóa/Sửa trực tiếp các dòng trên bảng bên dưới, sau đó bấm nút Lưu:"
+        "💡 Các cột đã được Auto Size vừa văn bản. Bạn có thể kích chuột đúp vào ô để chỉnh sửa:"
     )
 
-    edited_df = st.data_editor(
-        st.session_state[session_key],
-        use_container_width=True,
-        num_rows="dynamic",
-        key=editor_key,
-    )
+    # Gọi hàm AgGrid đã khai báo ở Bước 3
+    edited_df = render_aggrid_table(st.session_state[session_key], cat_key)
 
     col_save, col_reload = st.columns([2, 1])
 
@@ -338,12 +349,10 @@ def render_single_category(cat_key, cat_title):
         ):
             st.session_state[session_key] = edited_df
             if save_category_data(cat_key, edited_df):
-                st.success(f"✅ Dữ liệu danh mục đã được lưu vĩnh viễn!")
+                st.success("✅ Dữ liệu danh mục đã được lưu vĩnh viễn!")
 
     with col_reload:
         if st.button("🔄 Tải lại dữ liệu", key=f"btn_reload_{cat_key}"):
-            if editor_key in st.session_state:
-                del st.session_state[editor_key]
             st.session_state[session_key] = load_category_data(
                 cat_key, default_df
             )
@@ -351,25 +360,18 @@ def render_single_category(cat_key, cat_title):
             st.rerun()
 
 
-# -----------------------------------------------------------------------------
-# HÀM CHÍNH - QUẢN LÝ DANH SÁCH TẤT CẢ DANH MỤC
-# -----------------------------------------------------------------------------
+# Hàm chính điều hướng danh mục
 def render_category_management():
     st.subheader("Chi tiết danh mục hệ thống")
 
-    # Load danh sách danh mục hiện có
     cat_list = load_category_list()
 
-    # =========================================================================
-    # CHỨC NĂNG MỚI: QUẢN LÝ DANH SÁCH DANH MỤC (THÊM / ĐỔI TÊN / XÓA TAB)
-    # =========================================================================
     with st.expander(
         "⚙️ QUẢN LÝ DANH SÁCH DANH MỤC (THÊM / ĐỔI TÊN / XÓA TAB DANH MỤC)",
         expanded=False,
     ):
         col_cat_add, col_cat_edit, col_cat_del = st.columns(3)
 
-        # 1. THÊM TAB DANH MỤC MỚI
         with col_cat_add:
             st.markdown("**➕ Thêm danh mục mới**")
             new_cat_title = st.text_input(
@@ -388,7 +390,6 @@ def render_category_management():
                     cat_list[new_key] = f"📁 {new_cat_title}"
                     save_category_list(cat_list)
 
-                    # Tạo dataframe rỗng mẫu cho danh mục mới
                     init_df = pd.DataFrame({
                         "Mã": ["M01"],
                         "Tên " + new_cat_title: ["Nội dung 01"],
@@ -399,7 +400,6 @@ def render_category_management():
                     st.success(f"Đã tạo danh mục '{new_cat_title}'!")
                     st.rerun()
 
-        # 2. ĐỔI TÊN TAB DANH MỤC
         with col_cat_edit:
             st.markdown("**✏️ Đổi tên danh mục**")
             selected_edit_key = st.selectbox(
@@ -418,7 +418,6 @@ def render_category_management():
                     st.success("Đã đổi tên danh mục thành công!")
                     st.rerun()
 
-        # 3. XÓA TAB DANH MỤC
         with col_cat_del:
             st.markdown("**🗑️ Xóa danh mục**")
             selected_del_key = st.selectbox(
@@ -438,13 +437,8 @@ def render_category_management():
 
     st.write("")
 
-    # =========================================================================
-    # HIỂN THỊ ĐỘNG CÁC TAB THEO DANH SÁCH DANH MỤC
-    # =========================================================================
     if not cat_list:
-        st.info(
-            "Chưa có danh mục nào. Hãy bấm '⚙️ QUẢN LÝ DANH SÁCH DANH MỤC' ở trên để thêm mới."
-        )
+        st.info("Chưa có danh mục nào. Hãy thêm mới ở trên.")
         return
 
     cat_keys = list(cat_list.keys())
