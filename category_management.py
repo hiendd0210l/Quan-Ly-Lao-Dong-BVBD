@@ -153,6 +153,31 @@ def save_category_data(cat_key, df):
         return False
 
 
+# =============================================================================
+# HÀM TÍNH ĐỘ RỘNG CỘT AN TOÀN NGHỆ THUẬT (TRÁNH LỖI JSON SERIALIZABLE)
+# =============================================================================
+def build_safe_column_config(df):
+    column_config = {}
+    for col in df.columns:
+        # Lấy độ dài chuỗi ký tự dài nhất trong cột (bao gồm cả tiêu đề)
+        max_len = max(
+            df[col].astype(str).map(len).max() if not df.empty else 0, len(str(col))
+        )
+
+        # Định độ rộng theo kích thước ước tính (hoặc chuỗi 'small', 'medium', 'large')
+        if max_len <= 10:
+            width_type = "small"
+        elif max_len <= 25:
+            width_type = "medium"
+        else:
+            width_type = "large"
+
+        column_config[col] = st.column_config.Column(
+            label=str(col), width=width_type
+        )
+    return column_config
+
+
 # Giao diện quản lý nội dung của từng Danh mục
 def render_single_category(cat_key, cat_title):
     session_key = f"df_{cat_key}"
@@ -304,13 +329,16 @@ def render_single_category(cat_key, cat_title):
                     st.rerun()
 
     # -------------------------------------------------------------------------
-    # BẢNG DỮ LIỆU ĐÃ ĐƯỢC CHỈNH TỐI ƯU, KHÔNG DÙNG COLUMN_CONFIG ĐỂ TRÁNH LỖI JSON
+    # BẢNG DỮ LIỆU ĐÃ TỰ ĐỘNG BỎ DÃN DÒNG TRỐNG & TỰ CĂN CHỈNH ĐỘ RỘNG
     # -------------------------------------------------------------------------
     st.write("")
 
+    safe_column_config = build_safe_column_config(st.session_state[session_key])
+
     edited_df = st.data_editor(
         st.session_state[session_key],
-        use_container_width=True,
+        use_container_width=False,  # Để False để cột vừa vặn nội dung chữ thay vì giãn hết toàn màn hình
+        column_config=safe_column_config,
         num_rows="dynamic",
         key=editor_key,
     )
