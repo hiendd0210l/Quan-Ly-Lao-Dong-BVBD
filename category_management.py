@@ -2,12 +2,12 @@ import os
 import pandas as pd
 import streamlit as st
 
-# Đường dẫn file dữ liệu lưu vĩnh viễn
+# Thư mục lưu dữ liệu vĩnh viễn
 DATA_DIR = "data_categories"
 os.makedirs(DATA_DIR, exist_ok=True)
 
 
-# 1. Hàm đọc dữ liệu từ file
+# 1. Hàm nạp dữ liệu từ file CSV
 def load_category_data(cat_key, default_df):
     file_path = os.path.join(DATA_DIR, f"{cat_key}.csv")
     if os.path.exists(file_path):
@@ -18,7 +18,7 @@ def load_category_data(cat_key, default_df):
     return default_df
 
 
-# 2. Hàm lưu dữ liệu bền vững xuống file
+# 2. Hàm lưu dữ liệu bền vững xuống file CSV
 def save_category_data(cat_key, df):
     file_path = os.path.join(DATA_DIR, f"{cat_key}.csv")
     try:
@@ -29,21 +29,19 @@ def save_category_data(cat_key, df):
         return False
 
 
-# 3. Hàm hiển thị giao diện dùng chung cho từng Danh mục
+# 3. Giao diện quản lý từng danh mục cụ thể
 def render_single_category(cat_key, cat_title, default_df):
-    st.subheader(f"Chi tiết danh mục: {cat_title}")
-
     session_key = f"df_{cat_key}"
     editor_key = f"editor_{cat_key}"
 
-    # Khởi tạo dữ liệu
+    # Khởi tạo dữ liệu vào session state
     if session_key not in st.session_state:
         st.session_state[session_key] = load_category_data(
             cat_key, default_df
         )
 
     # -------------------------------------------------------------------------
-    # KHU VỰC 1: CẬP NHẬT TỪ FILE EXCEL / TẢI EXCEL MẪU
+    # KHU VỰC 1: NHẬP / XUẤT EXCEL MẪU
     # -------------------------------------------------------------------------
     with st.expander(
         "📊 NHẬP DỮ LIỆU TỪ EXCEL / TẢI FILE EXCEL MẪU", expanded=False
@@ -51,7 +49,7 @@ def render_single_category(cat_key, cat_title, default_df):
         col_ex1, col_ex2 = st.columns([1, 2])
 
         with col_ex1:
-            st.markdown("**1. Tải file Excel mẫu:**")
+            st.markdown("**1. Tải file Excel/CSV mẫu:**")
             sample_csv = st.session_state[session_key].head(2).to_csv(
                 index=False, encoding="utf-8-sig"
             )
@@ -117,7 +115,7 @@ def render_single_category(cat_key, cat_title, default_df):
                 st.error(f"Lỗi đọc file: {e}")
 
     # -------------------------------------------------------------------------
-    # KHU VỰC 2: QUẢN LÝ CỘT TIÊU ĐỀ
+    # KHU VỰC 2: QUẢN LÝ CỘT TIÊU ĐỀ (THÊM / SỬA / XÓA CỘT)
     # -------------------------------------------------------------------------
     with st.expander(
         "🛠️ QUẢN LÝ CỘT TIÊU ĐỀ CỦA BẢNG (THÊM / SỬA / XÓA CỘT)", expanded=False
@@ -181,11 +179,11 @@ def render_single_category(cat_key, cat_title, default_df):
                     st.rerun()
 
     # -------------------------------------------------------------------------
-    # KHU VỰC 3: BẢNG DỮ LIỆU & NÚT LƯU VĨNH VIỄN
+    # KHU VỰC 3: BẢNG DỮ LIỆU CHỈNH SỬA & LƯU / TẢI LẠI
     # -------------------------------------------------------------------------
     st.write("")
     st.caption(
-        "💡 Chỉnh sửa, thêm/xóa dòng trực tiếp trên bảng bên dưới, sau đó nhấn nút Lưu:"
+        "💡 Thêm/Xóa/Sửa trực tiếp các dòng trên bảng bên dưới, sau đó bấm nút Lưu:"
     )
 
     edited_df = st.data_editor(
@@ -206,12 +204,12 @@ def render_single_category(cat_key, cat_title, default_df):
             st.session_state[session_key] = edited_df
             if save_category_data(cat_key, edited_df):
                 st.success(
-                    "✅ Dữ liệu đã được lưu vĩnh viễn! Không bị mất khi tải lại trang."
+                    f"✅ Dữ liệu danh mục '{cat_title}' đã được lưu thành công!"
                 )
 
     with col_reload:
         if st.button("🔄 Tải lại dữ liệu", key=f"btn_reload_{cat_key}"):
-            # Xóa cache bộ nhớ tạm của Editor để tải lại chính xác dữ liệu từ ổ đĩa
+            # Xóa cache bộ nhớ của data_editor để buộc Streamlit load dữ liệu mới nhất
             if editor_key in st.session_state:
                 del st.session_state[editor_key]
             st.session_state[session_key] = load_category_data(
@@ -222,11 +220,13 @@ def render_single_category(cat_key, cat_title, default_df):
 
 
 # -----------------------------------------------------------------------------
-# DỮ LIỆU MẶC ĐỊNH & ĐIỀU HƯỚNG CÁC TAB DANH MỤC
+# HÀM CHÍNH - HIỂN THỊ ĐẦY ĐỦ CÁC TAB DANH MỤC
 # -----------------------------------------------------------------------------
 def render_category_management():
-    # Danh sách 5 Tab thiết kế ban đầu
-    tab1, tab2, tab3, tab4, tab5 = st.tabs([
+    st.subheader("Chi tiết danh mục hệ thống")
+
+    # Tạo 5 Tab điều hướng danh mục
+    tabs = st.tabs([
         "📌 Chức danh & Mã ngạch",
         "🎓 Trình độ chuyên môn",
         "📝 Loại Hợp đồng Lao động",
@@ -234,8 +234,9 @@ def render_category_management():
         "🏛️ Ngạch bậc lương cơ bản",
     ])
 
-    with tab1:
-        default_chuc_danh = pd.DataFrame({
+    # Tab 1: Chức danh & Mã ngạch
+    with tabs[0]:
+        df_chuc_danh = pd.DataFrame({
             "Mã CĐ": ["BS", "BSCK1", "BSCK2", "ĐĐ", "KTV", "DS"],
             "Tên Chức Danh": [
                 "Bác sĩ",
@@ -263,11 +264,12 @@ def render_category_management():
             ],
         })
         render_single_category(
-            "chuc_danh", "Chức danh & Mã ngạch", default_chuc_danh
+            "chuc_danh", "Chức danh & Mã ngạch", df_chuc_danh
         )
 
-    with tab2:
-        default_trinh_do = pd.DataFrame({
+    # Tab 2: Trình độ chuyên môn
+    with tabs[1]:
+        df_trinh_do = pd.DataFrame({
             "Mã TĐ": ["TS", "ThS", "BSCKII", "BSCKI", "CN", "CĐ", "TC"],
             "Tên Trình độ": [
                 "Tiến sĩ",
@@ -288,12 +290,11 @@ def render_category_management():
                 "Trung cấp",
             ],
         })
-        render_single_category(
-            "trinh_do", "Trình độ chuyên môn", default_trinh_do
-        )
+        render_single_category("trinh_do", "Trình độ chuyên môn", df_trinh_do)
 
-    with tab3:
-        default_hop_dong = pd.DataFrame({
+    # Tab 3: Loại Hợp đồng Lao động
+    with tabs[2]:
+        df_hop_dong = pd.DataFrame({
             "Mã HĐ": ["KTH", "12T", "36T", "TV"],
             "Tên Loại Hợp đồng": [
                 "HĐLĐ Không xác định thời hạn",
@@ -302,19 +303,15 @@ def render_category_management():
                 "Hợp đồng Thử việc",
             ],
             "Thời hạn (Tháng)": ["Vô thời hạn", "12", "36", "02"],
-            "Ghi chú": [
-                "Chính thức",
-                "Chính thức",
-                "Chính thức",
-                "Thử việc",
-            ],
+            "Ghi chú": ["Chính thức", "Chính thức", "Chính thức", "Thử việc"],
         })
         render_single_category(
-            "loai_hop_dong", "Loại Hợp đồng Lao động", default_hop_dong
+            "loai_hop_dong", "Loại Hợp đồng Lao động", df_hop_dong
         )
 
-    with tab4:
-        default_phu_cap = pd.DataFrame({
+    # Tab 4: Danh mục Phụ cấp / Lương
+    with tabs[3]:
+        df_phu_cap = pd.DataFrame({
             "Mã PC": ["PC_CV", "PC_UD", "PC_TN", "PC_DH"],
             "Tên Loại Phụ cấp": [
                 "Phụ cấp Chức vụ",
@@ -331,11 +328,12 @@ def render_category_management():
             ],
         })
         render_single_category(
-            "phu_cap", "Danh mục Phụ cấp / Lương", default_phu_cap
+            "phu_cap", "Danh mục Phụ cấp / Lương", df_phu_cap
         )
 
-    with tab5:
-        default_ngach_luong = pd.DataFrame({
+    # Tab 5: Ngạch bậc lương cơ bản
+    with tabs[4]:
+        df_ngach_luong = pd.DataFrame({
             "Mã Ngạch": ["V.08.01.01", "V.08.01.02", "V.08.01.03", "V.08.05.12"],
             "Tên Ngạch lương": [
                 "Bác sĩ cao cấp (Hạng I)",
@@ -347,7 +345,7 @@ def render_category_management():
             "Bậc tối đa": ["8", "8", "12", "12"],
         })
         render_single_category(
-            "ngach_luong", "Ngạch bậc lương cơ bản", default_ngach_luong
+            "ngach_luong", "Ngạch bậc lương cơ bản", df_ngach_luong
         )
 
 
