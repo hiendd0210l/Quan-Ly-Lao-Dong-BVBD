@@ -2,8 +2,6 @@ import json
 import os
 import pandas as pd
 import streamlit as st
-# [BƯỚC 2] Import thư viện AgGrid
-from st_aggrid import AgGrid, ColumnsAutoSizeMode, GridOptionsBuilder
 
 # Thư mục lưu dữ liệu vĩnh viễn
 DATA_DIR = "data_categories"
@@ -156,42 +154,27 @@ def save_category_data(cat_key, df):
 
 
 # =============================================================================
-# [BƯỚC 3] HÀM HIỂN THỊ BẢNG AGGRID VỚI TÍNH NĂNG AUTO SIZE CỘT
+# HÀM TỰ ĐỘNG TÍNH TOÁN KÍCH THƯỚC CỘT (AUTO SIZE CO GIÃN THEO CHỮ)
 # =============================================================================
-def render_aggrid_table(df, key_prefix):
-    gb = GridOptionsBuilder.from_dataframe(df)
-
-    # Cấu hình tính năng chỉnh sửa, lọc, sắp xếp, kéo mép cột
-    gb.configure_default_column(
-        resizable=True,
-        filterable=True,
-        sortable=True,
-        editable=True,
-    )
-
-    gridOptions = gb.build()
-
-    # Hiển thị bảng với tính năng tự động vừa văn bản (FIT_CONTENTS)
-    grid_response = AgGrid(
-        df,
-        gridOptions=gridOptions,
-        columns_auto_size_mode=ColumnsAutoSizeMode.FIT_CONTENTS,  # Auto Size độ rộng cột
-        update_mode="MODEL_CHANGED",
-        data_return_mode="FILTERED_AND_SORTED",
-        fit_columns_on_grid_load=False,
-        height=350,
-        theme="streamlit",
-        key=f"grid_{key_prefix}",
-    )
-
-    # Lấy dữ liệu DataFrame đã chỉnh sửa trả về
-    updated_df = pd.DataFrame(grid_response["data"])
-    return updated_df
+def build_column_auto_size_config(df):
+    column_config = {}
+    for col in df.columns:
+        # Lấy chiều dài chuỗi dài nhất trong cột (kể cả Tiêu đề cột)
+        max_len = max(
+            df[col].astype(str).map(len).max() if not df.empty else 0, len(str(col))
+        )
+        # Quy đổi độ dài ký tự sang độ rộng pixel (mỗi ký tự ~ 11px + padding 40px)
+        calc_width = max(110, min(max_len * 11 + 45, 500))
+        column_config[col] = st.column_config.Column(
+            label=str(col), width=calc_width
+        )
+    return column_config
 
 
 # Giao diện quản lý nội dung của từng Danh mục
 def render_single_category(cat_key, cat_title):
     session_key = f"df_{cat_key}"
+    editor_key = f"editor_{cat_key}"
 
     default_df = pd.DataFrame(
         {"Mã": ["M01"], "Tên danh mục": ["Mẫu 01"], "Ghi chú": [""]}
@@ -254,6 +237,8 @@ def render_single_category(cat_key, cat_title):
                         save_category_data(
                             cat_key, st.session_state[session_key]
                         )
+                        if editor_key in st.session_state:
+                            del st.session_state[editor_key]
                         st.success("✅ Đã cập nhật thành công!")
                         st.rerun()
 
@@ -267,6 +252,8 @@ def render_single_category(cat_key, cat_title):
                         save_category_data(
                             cat_key, st.session_state[session_key]
                         )
+                        if editor_key in st.session_state:
+                            del st.session_state[editor_key]
                         st.success("✅ Đã ghi đè dữ liệu thành công!")
                         st.rerun()
             except Exception as e:
@@ -290,6 +277,8 @@ def render_single_category(cat_key, cat_title):
                 ):
                     st.session_state[session_key][new_col] = ""
                     save_category_data(cat_key, st.session_state[session_key])
+                    if editor_key in st.session_state:
+                        del st.session_state[editor_key]
                     st.success(f"Đã thêm cột '{new_col}'")
                     st.rerun()
 
@@ -308,6 +297,8 @@ def render_single_category(cat_key, cat_title):
                         session_key
                     ].rename(columns={col_to_rename: renamed_name})
                     save_category_data(cat_key, st.session_state[session_key])
+                    if editor_key in st.session_state:
+                        del st.session_state[editor_key]
                     st.success("Đã đổi tên cột thành công!")
                     st.rerun()
 
@@ -325,19 +316,30 @@ def render_single_category(cat_key, cat_title):
                         session_key
                     ].drop(columns=[col_to_del])
                     save_category_data(cat_key, st.session_state[session_key])
+                    if editor_key in st.session_state:
+                        del st.session_state[editor_key]
                     st.success(f"Đã xóa cột '{col_to_del}'")
                     st.rerun()
 
     # -------------------------------------------------------------------------
-    # [BƯỚC 4] TÍCH HỢP HÀM BẢNG AGGRID AUTO SIZE VÀO GIAO DIỆN
+    # HIỂN THỊ BẢNG DỮ LIỆU ĐÃ ĐƯỢC TỰ ĐỘNG TÍNH TOÁN KÍCH THƯỚC CỘT (AUTO-SIZE)
     # -------------------------------------------------------------------------
     st.write("")
-    st.caption(
-        "💡 Các cột đã được Auto Size vừa văn bản. Bạn có thể kích chuột đúp vào ô để chỉnh sửa:"
+    st.caption("💡 Các cột đã được Auto Size vừa vặn văn bản:")
+
+    # Tính toán kích thước tự động cho các cột
+    auto_column_configs = build_column_auto_size_config(
+        st.session_state[session_key]
     )
 
-    # Gọi hàm AgGrid đã khai báo ở Bước 3
-    edited_df = render_aggrid_table(st.session_state[session_key], cat_key)
+    # st.data_editor với use_container_width=False giúp chiều rộng pixel vừa khít hoạt động!
+    edited_df = st.data_editor(
+        st.session_state[session_key],
+        use_container_width=False,
+        column_config=auto_column_configs,
+        num_rows="dynamic",
+        key=editor_key,
+    )
 
     col_save, col_reload = st.columns([2, 1])
 
@@ -353,6 +355,8 @@ def render_single_category(cat_key, cat_title):
 
     with col_reload:
         if st.button("🔄 Tải lại dữ liệu", key=f"btn_reload_{cat_key}"):
+            if editor_key in st.session_state:
+                del st.session_state[editor_key]
             st.session_state[session_key] = load_category_data(
                 cat_key, default_df
             )
