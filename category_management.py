@@ -153,24 +153,6 @@ def save_category_data(cat_key, df):
         return False
 
 
-# =============================================================================
-# HÀM BỎ SỬ DỤNG DẠNG OBJECT JSON NGUY HIỂM - CHỈ CẤU HÌNH KÍCH THƯỚC CHIỀU RỘNG CHUẨN
-# =============================================================================
-def build_column_auto_size_config(df):
-    column_config = {}
-    for col in df.columns:
-        # Lấy chiều dài chuỗi dài nhất trong cột (kể cả Tiêu đề cột)
-        max_len = max(
-            df[col].astype(str).map(len).max() if not df.empty else 0, len(str(col))
-        )
-        # Tính chiều rộng pixel tương ứng
-        calc_width = max(120, min(max_len * 11 + 40, 500))
-        column_config[col] = st.column_config.TextColumn(
-            label=str(col), width=calc_width
-        )
-    return column_config
-
-
 # Giao diện quản lý nội dung của từng Danh mục
 def render_single_category(cat_key, cat_title):
     session_key = f"df_{cat_key}"
@@ -322,17 +304,13 @@ def render_single_category(cat_key, cat_title):
                     st.rerun()
 
     # -------------------------------------------------------------------------
-    # BẢNG DỮ LIỆU ĐÃ ĐƯỢC TỰ ĐỘNG CÂN BẰNG CHIỀU RỘNG (AUTO-SIZE)
+    # BẢNG DỮ LIỆU ĐÃ ĐƯỢC CHỈNH TỐI ƯU, KHÔNG DÙNG COLUMN_CONFIG ĐỂ TRÁNH LỖI JSON
     # -------------------------------------------------------------------------
     st.write("")
-    st.caption("💡 Các cột đã được Auto Size vừa vặn văn bản:")
-
-    auto_configs = build_column_auto_size_config(st.session_state[session_key])
 
     edited_df = st.data_editor(
         st.session_state[session_key],
-        use_container_width=False,
-        column_config=auto_configs,
+        use_container_width=True,
         num_rows="dynamic",
         key=editor_key,
     )
