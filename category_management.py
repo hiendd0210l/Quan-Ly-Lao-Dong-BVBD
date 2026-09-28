@@ -1,9 +1,10 @@
+import io
 import json
 import os
 import pandas as pd
 import streamlit as st
 
-# Thư mục lưu dữ liệu vĩnh viễn
+# Thư mục lưu dữ liệu
 DATA_DIR = "data_categories"
 os.makedirs(DATA_DIR, exist_ok=True)
 CONFIG_FILE = os.path.join(DATA_DIR, "category_list.json")
@@ -154,17 +155,23 @@ def save_category_data(cat_key, df):
 
 
 # =============================================================================
-# HÀM TÍNH ĐỘ RỘNG CỘT AN TOÀN NGHỆ THUẬT (TRÁNH LỖI JSON SERIALIZABLE)
+# HÀM CHUYỂN ĐỔI DATAFRAME THÀNH FILE EXCEL (.XLSX) TRONG BỘ NHỚ ĐỆM
 # =============================================================================
+def convert_df_to_excel(df):
+    output = io.BytesIO()
+    with pd.ExcelWriter(output, engine="openpyxl") as writer:
+        df.to_excel(writer, index=False, sheet_name="Sheet1")
+    output.seek(0)
+    return output
+
+
+# Cấu hình chiều rộng cột giao diện vừa văn bản
 def build_safe_column_config(df):
     column_config = {}
     for col in df.columns:
-        # Lấy độ dài chuỗi ký tự dài nhất trong cột (bao gồm cả tiêu đề)
         max_len = max(
             df[col].astype(str).map(len).max() if not df.empty else 0, len(str(col))
         )
-
-        # Định độ rộng theo kích thước ước tính (hoặc chuỗi 'small', 'medium', 'large')
         if max_len <= 10:
             width_type = "small"
         elif max_len <= 25:
@@ -178,7 +185,7 @@ def build_safe_column_config(df):
     return column_config
 
 
-# Giao diện quản lý nội dung của từng Danh mục
+# Giao diện quản lý từng danh mục
 def render_single_category(cat_key, cat_title):
     session_key = f"df_{cat_key}"
     editor_key = f"editor_{cat_key}"
@@ -194,22 +201,24 @@ def render_single_category(cat_key, cat_title):
             cat_key, default_df
         )
 
-    # 1. KHU VỰC NHẬP / XUẤT EXCEL MẪU
+    # 1. KHU VỰC TẢI FILE MẪU EXCEL & NHẬP DỮ LIỆU
     with st.expander(
         "📊 NHẬP DỮ LIỆU TỪ EXCEL / TẢI FILE EXCEL MẪU", expanded=False
     ):
         col_ex1, col_ex2 = st.columns([1, 2])
 
         with col_ex1:
-            st.markdown("**1. Tải file Excel/CSV mẫu:**")
-            sample_csv = st.session_state[session_key].head(2).to_csv(
-                index=False, encoding="utf-8-sig"
+            st.markdown("**1. Tải file Excel mẫu (.xlsx):**")
+            # Tạo file mẫu định dạng .xlsx
+            excel_data = convert_df_to_excel(
+                st.session_state[session_key].head(2)
             )
+
             st.download_button(
-                label=f"📥 Tải xuống File mẫu",
-                data=sample_csv,
-                file_name=f"Mau_{cat_key}.csv",
-                mime="text/csv",
+                label="📥 Tải xuống File mẫu (.xlsx)",
+                data=excel_data,
+                file_name=f"Mau_{cat_key}.xlsx",  # Đuôi file .xlsx
+                mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",  # Đặt MIME chuẩn cho Excel
                 key=f"btn_dl_{cat_key}",
             )
 
@@ -328,16 +337,14 @@ def render_single_category(cat_key, cat_title):
                     st.success(f"Đã xóa cột '{col_to_del}'")
                     st.rerun()
 
-    # -------------------------------------------------------------------------
-    # BẢNG DỮ LIỆU ĐÃ TỰ ĐỘNG BỎ DÃN DÒNG TRỐNG & TỰ CĂN CHỈNH ĐỘ RỘNG
-    # -------------------------------------------------------------------------
+    # 3. BẢNG DỮ LIỆU CĂN CHỈNH KÍCH THƯỚC VỪA VẶN
     st.write("")
 
     safe_column_config = build_safe_column_config(st.session_state[session_key])
 
     edited_df = st.data_editor(
         st.session_state[session_key],
-        use_container_width=False,  # Để False để cột vừa vặn nội dung chữ thay vì giãn hết toàn màn hình
+        use_container_width=False,
         column_config=safe_column_config,
         num_rows="dynamic",
         key=editor_key,
@@ -366,7 +373,7 @@ def render_single_category(cat_key, cat_title):
             st.rerun()
 
 
-# Hàm chính điều hướng danh mục
+# Điều hướng chính
 def render_category_management():
     st.subheader("Chi tiết danh mục hệ thống")
 
