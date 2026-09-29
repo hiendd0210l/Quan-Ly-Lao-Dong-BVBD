@@ -165,6 +165,15 @@ def convert_df_to_excel(df):
     return output
 
 
+# Hàm reset trạng thái data_editor an toàn tránh lỗi TypeError
+def reset_editor_state(editor_key):
+    st.session_state[editor_key] = {
+        "edited_rows": {},
+        "added_rows": [],
+        "deleted_rows": [],
+    }
+
+
 # Cấu hình chiều rộng cột giao diện vừa văn bản
 def build_safe_column_config(df):
     column_config = {}
@@ -217,8 +226,8 @@ def render_single_category(cat_key, cat_title):
             st.download_button(
                 label="📥 Tải xuống File mẫu (.xlsx)",
                 data=excel_data,
-                file_name=f"Mau_{cat_key}.xlsx",  # Đuôi file .xlsx
-                mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",  # Đặt MIME chuẩn cho Excel
+                file_name=f"Mau_{cat_key}.xlsx",  # Định dạng file .xlsx
+                mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",  # MIME type cho Excel
                 key=f"btn_dl_{cat_key}",
             )
 
@@ -246,15 +255,17 @@ def render_single_category(cat_key, cat_title):
                         "➕ Nhập nối tiếp vào bảng hiện tại",
                         key=f"btn_append_{cat_key}",
                     ):
-                        st.session_state[session_key] = pd.concat(
+                        new_df = pd.concat(
                             [st.session_state[session_key], df_excel],
                             ignore_index=True,
                         ).drop_duplicates()
-                        save_category_data(
-                            cat_key, st.session_state[session_key]
-                        )
-                        if editor_key in st.session_state:
-                            del st.session_state[editor_key]
+
+                        st.session_state[session_key] = new_df
+                        save_category_data(cat_key, new_df)
+
+                        # Reset editor state để tránh lỗi TypeError
+                        reset_editor_state(editor_key)
+
                         st.success("✅ Đã cập nhật thành công!")
                         st.rerun()
 
@@ -265,11 +276,11 @@ def render_single_category(cat_key, cat_title):
                         key=f"btn_overwrite_{cat_key}",
                     ):
                         st.session_state[session_key] = df_excel
-                        save_category_data(
-                            cat_key, st.session_state[session_key]
-                        )
-                        if editor_key in st.session_state:
-                            del st.session_state[editor_key]
+                        save_category_data(cat_key, df_excel)
+
+                        # Reset editor state để tránh lỗi TypeError
+                        reset_editor_state(editor_key)
+
                         st.success("✅ Đã ghi đè dữ liệu thành công!")
                         st.rerun()
             except Exception as e:
@@ -293,8 +304,7 @@ def render_single_category(cat_key, cat_title):
                 ):
                     st.session_state[session_key][new_col] = ""
                     save_category_data(cat_key, st.session_state[session_key])
-                    if editor_key in st.session_state:
-                        del st.session_state[editor_key]
+                    reset_editor_state(editor_key)
                     st.success(f"Đã thêm cột '{new_col}'")
                     st.rerun()
 
@@ -313,8 +323,7 @@ def render_single_category(cat_key, cat_title):
                         session_key
                     ].rename(columns={col_to_rename: renamed_name})
                     save_category_data(cat_key, st.session_state[session_key])
-                    if editor_key in st.session_state:
-                        del st.session_state[editor_key]
+                    reset_editor_state(editor_key)
                     st.success("Đã đổi tên cột thành công!")
                     st.rerun()
 
@@ -332,12 +341,11 @@ def render_single_category(cat_key, cat_title):
                         session_key
                     ].drop(columns=[col_to_del])
                     save_category_data(cat_key, st.session_state[session_key])
-                    if editor_key in st.session_state:
-                        del st.session_state[editor_key]
+                    reset_editor_state(editor_key)
                     st.success(f"Đã xóa cột '{col_to_del}'")
                     st.rerun()
 
-    # 3. BẢNG DỮ LIỆU CĂN CHỈNH KÍCH THƯỚC VỪA VẶN
+    # 3. BẢNG DỮ LIỆU BẢO ĐẢM TƯƠNG THÍCH DỮ LIỆU
     st.write("")
 
     safe_column_config = build_safe_column_config(st.session_state[session_key])
@@ -364,12 +372,11 @@ def render_single_category(cat_key, cat_title):
 
     with col_reload:
         if st.button("🔄 Tải lại dữ liệu", key=f"btn_reload_{cat_key}"):
-            if editor_key in st.session_state:
-                del st.session_state[editor_key]
+            reset_editor_state(editor_key)
             st.session_state[session_key] = load_category_data(
                 cat_key, default_df
             )
-            st.success("🔄 Đã tải lại dữ liệu mới nhất từ CSDL!")
+            st.success("🔄 Đã tải lại dữ liệu mới nhất!")
             st.rerun()
 
 
