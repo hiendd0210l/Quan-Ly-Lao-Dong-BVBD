@@ -155,7 +155,7 @@ def save_category_data(cat_key, df):
 
 
 # =============================================================================
-# HÀM CHUYỂN ĐỔI DATAFRAME THÀNH FILE EXCEL (.XLSX) TRONG BỘ NHỚ ĐỆM
+# CHUYỂN ĐỔI DATAFRAME THÀNH FILE EXCEL (.XLSX) TRONG BỘ NHỚ ĐỆM
 # =============================================================================
 def convert_df_to_excel(df):
     output = io.BytesIO()
@@ -165,22 +165,20 @@ def convert_df_to_excel(df):
     return output
 
 
-# Hàm reset trạng thái data_editor an toàn tránh lỗi TypeError
-def reset_editor_state(editor_key):
-    st.session_state[editor_key] = {
-        "edited_rows": {},
-        "added_rows": [],
-        "deleted_rows": [],
-    }
-
-
-# Cấu hình chiều rộng cột giao diện vừa văn bản
+# Cấu hình chiều rộng cột an toàn (Đã xử lý ô trống NaN/None)
 def build_safe_column_config(df):
     column_config = {}
+    if df is None or df.empty:
+        return column_config
+
     for col in df.columns:
-        max_len = max(
-            df[col].astype(str).map(len).max() if not df.empty else 0, len(str(col))
+        # Chuyển toàn bộ dữ liệu cột sang chuỗi, thay thế ô trống NaN bằng ""
+        col_str_series = df[col].fillna("").astype(str)
+        max_data_len = (
+            col_str_series.str.len().max() if not col_str_series.empty else 0
         )
+        max_len = max(int(max_data_len or 0), len(str(col)))
+
         if max_len <= 10:
             width_type = "small"
         elif max_len <= 25:
@@ -188,7 +186,7 @@ def build_safe_column_config(df):
         else:
             width_type = "large"
 
-        column_config[col] = st.column_config.Column(
+        column_config[str(col)] = st.column_config.Column(
             label=str(col), width=width_type
         )
     return column_config
@@ -197,7 +195,7 @@ def build_safe_column_config(df):
 # Giao diện quản lý từng danh mục
 def render_single_category(cat_key, cat_title):
     session_key = f"df_{cat_key}"
-    editor_key = f"editor_{cat_key}"
+    version_key = f"ver_{cat_key}"
 
     default_df = pd.DataFrame(
         {"Mã": ["M01"], "Tên danh mục": ["Mẫu 01"], "Ghi chú": [""]}
@@ -210,6 +208,9 @@ def render_single_category(cat_key, cat_title):
             cat_key, default_df
         )
 
+    if version_key not in st.session_state:
+        st.session_state[version_key] = 0
+
     # 1. KHU VỰC TẢI FILE MẪU EXCEL & NHẬP DỮ LIỆU
     with st.expander(
         "📊 NHẬP DỮ LIỆU TỪ EXCEL / TẢI FILE EXCEL MẪU", expanded=False
@@ -218,7 +219,6 @@ def render_single_category(cat_key, cat_title):
 
         with col_ex1:
             st.markdown("**1. Tải file Excel mẫu (.xlsx):**")
-            # Tạo file mẫu định dạng .xlsx
             excel_data = convert_df_to_excel(
                 st.session_state[session_key].head(2)
             )
@@ -226,8 +226,8 @@ def render_single_category(cat_key, cat_title):
             st.download_button(
                 label="📥 Tải xuống File mẫu (.xlsx)",
                 data=excel_data,
-                file_name=f"Mau_{cat_key}.xlsx",  # Định dạng file .xlsx
-                mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",  # MIME type cho Excel
+                file_name=f"Mau_{cat_key}.xlsx",
+                mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
                 key=f"btn_dl_{cat_key}",
             )
 
@@ -236,7 +236,7 @@ def render_single_category(cat_key, cat_title):
             uploaded_file = st.file_uploader(
                 "Chọn file từ máy tính:",
                 type=["xlsx", "xls", "csv"],
-                key=f"upload_{cat_key}",
+                key=f"upload_{cat_key}_{st.session_state[version_key]}",
             )
 
         if uploaded_file is not None:
@@ -245,6 +245,9 @@ def render_single_category(cat_key, cat_title):
                     df_excel = pd.read_csv(uploaded_file)
                 else:
                     df_excel = pd.read_excel(uploaded_file)
+
+                # Làm sạch dữ liệu rỗng
+                df_excel = df_excel.fillna("")
 
                 st.write("📌 **Xem trước dữ liệu tải lên:**")
                 st.dataframe(df_excel.head(5), use_container_width=True)
@@ -263,9 +266,8 @@ def render_single_category(cat_key, cat_title):
                         st.session_state[session_key] = new_df
                         save_category_data(cat_key, new_df)
 
-                        # Reset editor state để tránh lỗi TypeError
-                        reset_editor_state(editor_key)
-
+                        # Tăng version để reset hoàn toàn widget data_editor
+                        st.session_state[version_key] += 1
                         st.success("✅ Đã cập nhật thành công!")
                         st.rerun()
 
@@ -278,9 +280,8 @@ def render_single_category(cat_key, cat_title):
                         st.session_state[session_key] = df_excel
                         save_category_data(cat_key, df_excel)
 
-                        # Reset editor state để tránh lỗi TypeError
-                        reset_editor_state(editor_key)
-
+                        # Tăng version để reset hoàn toàn widget data_editor
+                        st.session_state[version_key] += 1
                         st.success("✅ Đã ghi đè dữ liệu thành công!")
                         st.rerun()
             except Exception as e:
@@ -304,7 +305,7 @@ def render_single_category(cat_key, cat_title):
                 ):
                     st.session_state[session_key][new_col] = ""
                     save_category_data(cat_key, st.session_state[session_key])
-                    reset_editor_state(editor_key)
+                    st.session_state[version_key] += 1
                     st.success(f"Đã thêm cột '{new_col}'")
                     st.rerun()
 
@@ -323,7 +324,7 @@ def render_single_category(cat_key, cat_title):
                         session_key
                     ].rename(columns={col_to_rename: renamed_name})
                     save_category_data(cat_key, st.session_state[session_key])
-                    reset_editor_state(editor_key)
+                    st.session_state[version_key] += 1
                     st.success("Đã đổi tên cột thành công!")
                     st.rerun()
 
@@ -341,21 +342,27 @@ def render_single_category(cat_key, cat_title):
                         session_key
                     ].drop(columns=[col_to_del])
                     save_category_data(cat_key, st.session_state[session_key])
-                    reset_editor_state(editor_key)
+                    st.session_state[version_key] += 1
                     st.success(f"Đã xóa cột '{col_to_del}'")
                     st.rerun()
 
-    # 3. BẢNG DỮ LIỆU BẢO ĐẢM TƯƠNG THÍCH DỮ LIỆU
+    # 3. BẢNG DỮ LIỆU
     st.write("")
 
-    safe_column_config = build_safe_column_config(st.session_state[session_key])
+    current_df = st.session_state[session_key].fillna("")
+    safe_column_config = build_safe_column_config(current_df)
+
+    # Đặt key động theo version_key để buộc Streamlit làm mới widget hoàn toàn khi ghi đè
+    editor_dynamic_key = (
+        f"editor_{cat_key}_v{st.session_state[version_key]}"
+    )
 
     edited_df = st.data_editor(
-        st.session_state[session_key],
+        current_df,
         use_container_width=False,
         column_config=safe_column_config,
         num_rows="dynamic",
-        key=editor_key,
+        key=editor_dynamic_key,
     )
 
     col_save, col_reload = st.columns([2, 1])
@@ -372,10 +379,10 @@ def render_single_category(cat_key, cat_title):
 
     with col_reload:
         if st.button("🔄 Tải lại dữ liệu", key=f"btn_reload_{cat_key}"):
-            reset_editor_state(editor_key)
             st.session_state[session_key] = load_category_data(
                 cat_key, default_df
             )
+            st.session_state[version_key] += 1
             st.success("🔄 Đã tải lại dữ liệu mới nhất!")
             st.rerun()
 
