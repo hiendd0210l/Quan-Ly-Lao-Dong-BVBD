@@ -154,9 +154,6 @@ def save_category_data(cat_key, df):
         return False
 
 
-# =============================================================================
-# CHUYỂN ĐỔI DATAFRAME THÀNH FILE EXCEL (.XLSX) TRONG BỘ NHỚ ĐỆM
-# =============================================================================
 def convert_df_to_excel(df):
     output = io.BytesIO()
     with pd.ExcelWriter(output, engine="openpyxl") as writer:
@@ -165,14 +162,12 @@ def convert_df_to_excel(df):
     return output
 
 
-# Cấu hình chiều rộng cột an toàn (Đã xử lý ô trống NaN/None)
 def build_safe_column_config(df):
     column_config = {}
     if df is None or df.empty:
         return column_config
 
     for col in df.columns:
-        # Chuyển toàn bộ dữ liệu cột sang chuỗi, thay thế ô trống NaN bằng ""
         col_str_series = df[col].fillna("").astype(str)
         max_data_len = (
             col_str_series.str.len().max() if not col_str_series.empty else 0
@@ -246,7 +241,6 @@ def render_single_category(cat_key, cat_title):
                 else:
                     df_excel = pd.read_excel(uploaded_file)
 
-                # Làm sạch dữ liệu rỗng
                 df_excel = df_excel.fillna("")
 
                 st.write("📌 **Xem trước dữ liệu tải lên:**")
@@ -265,8 +259,6 @@ def render_single_category(cat_key, cat_title):
 
                         st.session_state[session_key] = new_df
                         save_category_data(cat_key, new_df)
-
-                        # Tăng version để reset hoàn toàn widget data_editor
                         st.session_state[version_key] += 1
                         st.success("✅ Đã cập nhật thành công!")
                         st.rerun()
@@ -279,8 +271,6 @@ def render_single_category(cat_key, cat_title):
                     ):
                         st.session_state[session_key] = df_excel
                         save_category_data(cat_key, df_excel)
-
-                        # Tăng version để reset hoàn toàn widget data_editor
                         st.session_state[version_key] += 1
                         st.success("✅ Đã ghi đè dữ liệu thành công!")
                         st.rerun()
@@ -346,13 +336,58 @@ def render_single_category(cat_key, cat_title):
                     st.success(f"Đã xóa cột '{col_to_del}'")
                     st.rerun()
 
-    # 3. BẢNG DỮ LIỆU
+    # 3. BỔ SUNG KHU VỰC XÓA HÀNG TRONG DANH MỤC
+    with st.expander("🗑️ XÓA HÀNG TRONG BẢNG DANH MỤC", expanded=False):
+        current_df_del = st.session_state[session_key]
+        if not current_df_del.empty:
+            col_del_row1, col_del_row2 = st.columns([3, 1])
+
+            with col_del_row1:
+                # Tạo nhãn đại diện cho từng hàng để người dùng dễ chọn
+                first_col = current_df_del.columns[0]
+                row_options = [
+                    f"Hàng {idx + 1}: {row[first_col]}"
+                    for idx, row in current_df_del.iterrows()
+                ]
+
+                selected_rows_to_del = st.multiselect(
+                    "Chọn các hàng muốn xóa khỏi danh mục:",
+                    options=range(len(row_options)),
+                    format_func=lambda x: row_options[x],
+                    key=f"msel_del_rows_{cat_key}",
+                )
+
+            with col_del_row2:
+                st.write("")
+                st.write("")
+                if st.button(
+                    "❌ Xóa hàng đã chọn",
+                    type="primary",
+                    key=f"btn_del_rows_{cat_key}",
+                ):
+                    if selected_rows_to_del:
+                        # Thực hiện xóa các chỉ số hàng đã chọn
+                        updated_df = current_df_del.drop(
+                            index=selected_rows_to_del
+                        ).reset_index(drop=True)
+                        st.session_state[session_key] = updated_df
+                        save_category_data(cat_key, updated_df)
+                        st.session_state[version_key] += 1
+                        st.success(
+                            f"Đã xóa {len(selected_rows_to_del)} hàng!"
+                        )
+                        st.rerun()
+                    else:
+                        st.warning("Vui lòng chọn ít nhất 1 hàng để xóa.")
+        else:
+            st.info("Bảng hiện tại chưa có dữ liệu để xóa.")
+
+    # 4. BẢNG DỮ LIỆU CÓ THỂ SỬA / XÓA TRỰC TIẾP
     st.write("")
 
     current_df = st.session_state[session_key].fillna("")
     safe_column_config = build_safe_column_config(current_df)
 
-    # Đặt key động theo version_key để buộc Streamlit làm mới widget hoàn toàn khi ghi đè
     editor_dynamic_key = (
         f"editor_{cat_key}_v{st.session_state[version_key]}"
     )
@@ -361,7 +396,7 @@ def render_single_category(cat_key, cat_title):
         current_df,
         use_container_width=False,
         column_config=safe_column_config,
-        num_rows="dynamic",
+        num_rows="dynamic",  # Cho phép thêm / xóa hàng trực tiếp trên giao diện bảng
         key=editor_dynamic_key,
     )
 
