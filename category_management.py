@@ -3,13 +3,25 @@ import json
 import os
 import pandas as pd
 import streamlit as st
+from supabase import create_client
 
-# Thư mục lưu dữ liệu
-DATA_DIR = "data_categories"
-os.makedirs(DATA_DIR, exist_ok=True)
-CONFIG_FILE = os.path.join(DATA_DIR, "category_list.json")
+# ---------------------------------------------------------
+# KẾT NỐI SUPABASE
+# ---------------------------------------------------------
+@st.cache_resource
+def init_supabase():
+    try:
+        url = st.secrets["SUPABASE_URL"]
+        key = st.secrets["SUPABASE_KEY"]
+        return create_client(url, key)
+    except Exception as e:
+        st.error(f"⚠️️ Chưa cấu hình secrets SUPABASE_URL / SUPABASE_KEY: {e}")
+        return None
 
-# Danh sách danh mục mặc định ban đầu
+
+supabase = init_supabase()
+
+# Danh sách danh mục mặc định ban đầu (Dùng khởi tạo lần đầu nếu DB trống)
 DEFAULT_CATEGORIES = {
     "chuc_danh": {
         "title": "📌 Chức danh & Mã ngạch",
@@ -115,45 +127,80 @@ DEFAULT_CATEGORIES = {
 }
 
 
+# ---------------------------------------------------------
+# HÀM XỬ LÝ DỮ LIỆU CSDL SUPABASE
+# ---------------------------------------------------------
 def load_category_list():
-    if os.path.exists(CONFIG_FILE):
-        try:
-            with open(CONFIG_FILE, "r", encoding="utf-8") as f:
-                return json.load(f)
-        except Exception:
-            pass
-    initial_list = {
-        cat_key: item["title"] for cat_key, item in DEFAULT_CATEGORIES.items()
-    }
-    save_category_list(initial_list)
-    return initial_list
+    if not supabase:
+        return {cat_key: item["title"] for cat_key, item in DEFAULT_CATEGORIES.items()}
 
-
-def save_category_list(cat_dict):
-    with open(CONFIG_FILE, "w", encoding="utf-8") as f:
-        json.dump(cat_dict, f, ensure_ascii=False, indent=2)
+    try:
+        res = supabase.table("categories").select("cat_key, title").execute()
+        data = res.data
+        if data and len(data) > 0:
+            return {item["cat_key"]: item["title"] for item in data}
+        else:
+            # Khởi tạo mặc định nếu CSDL trống
+            initial_list = {}
+            for k, v in DEFAULT_CATEGORIES.items():
+                initial_list[k] = v["title"]
+                save_category_data(k, v["df"], v["title"])
+            return initial_list
+    except Exception as e:
+        st.error(f"Lỗi đọc danh sách danh mục từ Supabase: {e}")
+        return {cat_key: item["title"] for cat_key, item in DEFAULT_CATEGORIES.items()}
 
 
 def load_category_data(cat_key, default_df):
-    file_path = os.path.join(DATA_DIR, f"{cat_key}.csv")
-    if os.path.exists(file_path):
-        try:
-            return pd.read_csv(file_path)
-        except Exception:
-            pass
+    if not supabase:
+        return default_df
+
+    try:
+        res = (
+            supabase.table("categories")
+            .select("content")
+            .eq("cat_key", cat_key)
+            .execute()
+        )
+        data = res.data
+        if data and len(data) > 0 and data[0]["content"]:
+            return pd.DataFrame(data[0]["content"])
+    except Exception as e:
+        st.warning(f"Chưa tải được dữ liệu từ DB, dùng mặc định: {e}")
     return default_df
 
 
-def save_category_data(cat_key, df):
-    file_path = os.path.join(DATA_DIR, f"{cat_key}.csv")
+def save_category_data(cat_key, df, title=None):
+    if not supabase:
+        st.error("Không có kết nối Supabase.")
+        return False
+
     try:
-        df.to_csv(file_path, index=False, encoding="utf-8-sig")
+        records = df.to_dict(orient="records")
+        payload = {"cat_key": cat_key, "content": records}
+        if title:
+            payload["title"] = title
+
+        supabase.table("categories").upsert(payload).execute()
         return True
     except Exception as e:
-        st.error(f"Lỗi khi lưu dữ liệu: {e}")
+        st.error(f"Lỗi khi lưu vào Supabase: {e}")
         return False
 
 
+def delete_category_from_db(cat_key):
+    if supabase:
+        try:
+            supabase.table("categories").delete().eq("cat_key", cat_key).execute()
+            return True
+        except Exception as e:
+            st.error(f"Lỗi khi xóa danh mục: {e}")
+    return False
+
+
+# ---------------------------------------------------------
+# CÁC HÀM BỔ TRỢ GIAO DIỆN
+# ---------------------------------------------------------
 def convert_df_to_excel(df):
     output = io.BytesIO()
     with pd.ExcelWriter(output, engine="openpyxl") as writer:
@@ -187,7 +234,9 @@ def build_safe_column_config(df):
     return column_config
 
 
-# Giao diện quản lý từng danh mục
+# ---------------------------------------------------------
+# GIAO DIỆN QUẢN LÝ TỪNG DANH MỤC
+# ---------------------------------------------------------
 def render_single_category(cat_key, cat_title):
     session_key = f"df_{cat_key}"
     version_key = f"ver_{cat_key}"
@@ -199,25 +248,18 @@ def render_single_category(cat_key, cat_title):
         default_df = DEFAULT_CATEGORIES[cat_key]["df"]
 
     if session_key not in st.session_state:
-        st.session_state[session_key] = load_category_data(
-            cat_key, default_df
-        )
+        st.session_state[session_key] = load_category_data(cat_key, default_df)
 
     if version_key not in st.session_state:
         st.session_state[version_key] = 0
 
-    # 1. KHU VỰC TẢI FILE MẪU EXCEL & NHẬP DỮ LIỆU
-    with st.expander(
-        "📊 NHẬP DỮ LIỆU TỪ EXCEL / TẢI FILE EXCEL MẪU", expanded=False
-    ):
+    # 1. NHẬP / EXPORT EXCEL
+    with st.expander("📊 NHẬP DỮ LIỆU TỪ EXCEL / TẢI FILE EXCEL MẪU", expanded=False):
         col_ex1, col_ex2 = st.columns([1, 2])
 
         with col_ex1:
             st.markdown("**1. Tải file Excel mẫu (.xlsx):**")
-            excel_data = convert_df_to_excel(
-                st.session_state[session_key].head(2)
-            )
-
+            excel_data = convert_df_to_excel(st.session_state[session_key].head(2))
             st.download_button(
                 label="📥 Tải xuống File mẫu (.xlsx)",
                 data=excel_data,
@@ -242,78 +284,53 @@ def render_single_category(cat_key, cat_title):
                     df_excel = pd.read_excel(uploaded_file)
 
                 df_excel = df_excel.fillna("")
-
                 st.write("📌 **Xem trước dữ liệu tải lên:**")
                 st.dataframe(df_excel.head(5), use_container_width=True)
 
                 col_b1, col_b2 = st.columns(2)
                 with col_b1:
-                    if st.button(
-                        "➕ Nhập nối tiếp vào bảng hiện tại",
-                        key=f"btn_append_{cat_key}",
-                    ):
-                        new_df = pd.concat(
-                            [st.session_state[session_key], df_excel],
-                            ignore_index=True,
-                        ).drop_duplicates()
-
+                    if st.button("➕ Nhập nối tiếp vào bảng hiện tại", key=f"btn_append_{cat_key}"):
+                        new_df = pd.concat([st.session_state[session_key], df_excel], ignore_index=True).drop_duplicates()
                         st.session_state[session_key] = new_df
-                        save_category_data(cat_key, new_df)
+                        save_category_data(cat_key, new_df, cat_title)
                         st.session_state[version_key] += 1
-                        st.success("✅ Đã cập nhật thành công!")
+                        st.success("✅ Đã cập nhật thành công lên CSDL!")
                         st.rerun()
 
                 with col_b2:
-                    if st.button(
-                        "🔄 Ghi đè toàn bộ dữ liệu cũ",
-                        type="primary",
-                        key=f"btn_overwrite_{cat_key}",
-                    ):
+                    if st.button("🔄 Ghi đè toàn bộ dữ liệu cũ", type="primary", key=f"btn_overwrite_{cat_key}"):
                         st.session_state[session_key] = df_excel
-                        save_category_data(cat_key, df_excel)
+                        save_category_data(cat_key, df_excel, cat_title)
                         st.session_state[version_key] += 1
-                        st.success("✅ Đã ghi đè dữ liệu thành công!")
+                        st.success("✅ Đã ghi đè dữ liệu thành công lên CSDL!")
                         st.rerun()
             except Exception as e:
                 st.error(f"Lỗi đọc file: {e}")
 
-    # 2. KHU VỰC QUẢN LÝ CỘT TIÊU ĐỀ
-    with st.expander(
-        "🛠️ QUẢN LÝ CỘT TIÊU ĐỀ CỦA BẢNG (THÊM / SỬA / XÓA CỘT)", expanded=False
-    ):
+    # 2. QUẢN LÝ CỘT TIÊU ĐỀ
+    with st.expander("🛠️ QUẢN LÝ CỘT TIÊU ĐỀ CỦA BẢNG (THÊM / SỬA / XÓA CỘT)", expanded=False):
         c_add, c_edit, c_del = st.columns(3)
 
         with c_add:
             st.markdown("**➕ Thêm cột mới**")
-            new_col = st.text_input(
-                "Nhập tên cột mới:", key=f"txt_add_col_{cat_key}"
-            )
+            new_col = st.text_input("Nhập tên cột mới:", key=f"txt_add_col_{cat_key}")
             if st.button("Thêm cột", key=f"btn_add_col_{cat_key}"):
-                if (
-                    new_col
-                    and new_col not in st.session_state[session_key].columns
-                ):
+                if new_col and new_col not in st.session_state[session_key].columns:
                     st.session_state[session_key][new_col] = ""
-                    save_category_data(cat_key, st.session_state[session_key])
+                    save_category_data(cat_key, st.session_state[session_key], cat_title)
                     st.session_state[version_key] += 1
                     st.success(f"Đã thêm cột '{new_col}'")
                     st.rerun()
 
         with c_edit:
-            st.markdown("**✏️ Đổi tên cột tiêu đề**")
+            st.markdown("**✏️️ Đổi tên cột tiêu đề**")
             cols = list(st.session_state[session_key].columns)
-            col_to_rename = st.selectbox(
-                "Chọn cột cần đổi:", cols, key=f"sel_rename_{cat_key}"
-            )
-            renamed_name = st.text_input(
-                "Tên mới:", key=f"txt_rename_{cat_key}"
-            )
+            col_to_rename = st.selectbox("Chọn cột cần đổi:", cols, key=f"sel_rename_{cat_key}")
+            renamed_name = st.text_input("Tên mới:", key=f"txt_rename_{cat_key}")
             if st.button("Đổi tên", key=f"btn_rename_{cat_key}"):
                 if renamed_name and col_to_rename:
-                    st.session_state[session_key] = st.session_state[
-                        session_key
-                    ].rename(columns={col_to_rename: renamed_name})
-                    save_category_data(cat_key, st.session_state[session_key])
+                    st.session_state[session_key] = st.session_state[session_key].rename(columns={col_to_rename: renamed_name})
+                    save_category_data(cat_key, st.session_state[session_key], cat_title)
                     st.session_state[version_key] += 1
                     st.success("Đã đổi tên cột thành công!")
                     st.rerun()
@@ -321,35 +338,24 @@ def render_single_category(cat_key, cat_title):
         with c_del:
             st.markdown("**🗑️ Xóa cột khỏi bảng**")
             cols = list(st.session_state[session_key].columns)
-            col_to_del = st.selectbox(
-                "Chọn cột cần xóa:", cols, key=f"sel_del_{cat_key}"
-            )
-            if st.button(
-                "Xóa cột", type="primary", key=f"btn_del_col_{cat_key}"
-            ):
+            col_to_del = st.selectbox("Chọn cột cần xóa:", cols, key=f"sel_del_{cat_key}")
+            if st.button("Xóa cột", type="primary", key=f"btn_del_col_{cat_key}"):
                 if col_to_del in st.session_state[session_key].columns:
-                    st.session_state[session_key] = st.session_state[
-                        session_key
-                    ].drop(columns=[col_to_del])
-                    save_category_data(cat_key, st.session_state[session_key])
+                    st.session_state[session_key] = st.session_state[session_key].drop(columns=[col_to_del])
+                    save_category_data(cat_key, st.session_state[session_key], cat_title)
                     st.session_state[version_key] += 1
                     st.success(f"Đã xóa cột '{col_to_del}'")
                     st.rerun()
 
-    # 3. BỔ SUNG KHU VỰC XÓA HÀNG TRONG DANH MỤC
+    # 3. KHU VỰC XÓA HÀNG
     with st.expander("🗑️ XÓA HÀNG TRONG BẢNG DANH MỤC", expanded=False):
         current_df_del = st.session_state[session_key]
         if not current_df_del.empty:
             col_del_row1, col_del_row2 = st.columns([3, 1])
 
             with col_del_row1:
-                # Tạo nhãn đại diện cho từng hàng để người dùng dễ chọn
                 first_col = current_df_del.columns[0]
-                row_options = [
-                    f"Hàng {idx + 1}: {row[first_col]}"
-                    for idx, row in current_df_del.iterrows()
-                ]
-
+                row_options = [f"Hàng {idx + 1}: {row[first_col]}" for idx, row in current_df_del.iterrows()]
                 selected_rows_to_del = st.multiselect(
                     "Chọn các hàng muốn xóa khỏi danh mục:",
                     options=range(len(row_options)),
@@ -360,106 +366,76 @@ def render_single_category(cat_key, cat_title):
             with col_del_row2:
                 st.write("")
                 st.write("")
-                if st.button(
-                    "❌ Xóa hàng đã chọn",
-                    type="primary",
-                    key=f"btn_del_rows_{cat_key}",
-                ):
+                if st.button("❌ Xóa hàng đã chọn", type="primary", key=f"btn_del_rows_{cat_key}"):
                     if selected_rows_to_del:
-                        # Thực hiện xóa các chỉ số hàng đã chọn
-                        updated_df = current_df_del.drop(
-                            index=selected_rows_to_del
-                        ).reset_index(drop=True)
+                        updated_df = current_df_del.drop(index=selected_rows_to_del).reset_index(drop=True)
                         st.session_state[session_key] = updated_df
-                        save_category_data(cat_key, updated_df)
+                        save_category_data(cat_key, updated_df, cat_title)
                         st.session_state[version_key] += 1
-                        st.success(
-                            f"Đã xóa {len(selected_rows_to_del)} hàng!"
-                        )
+                        st.success(f"Đã xóa {len(selected_rows_to_del)} hàng!")
                         st.rerun()
                     else:
                         st.warning("Vui lòng chọn ít nhất 1 hàng để xóa.")
         else:
             st.info("Bảng hiện tại chưa có dữ liệu để xóa.")
 
-    # 4. BẢNG DỮ LIỆU CÓ THỂ SỬA / XÓA TRỰC TIẾP
+    # 4. BẢNG HIỂN THỊ VÀ CHỈNH SỬA
     st.write("")
-
     current_df = st.session_state[session_key].fillna("")
     safe_column_config = build_safe_column_config(current_df)
 
-    editor_dynamic_key = (
-        f"editor_{cat_key}_v{st.session_state[version_key]}"
-    )
+    editor_dynamic_key = f"editor_{cat_key}_v{st.session_state[version_key]}"
 
     edited_df = st.data_editor(
         current_df,
         use_container_width=False,
         column_config=safe_column_config,
-        num_rows="dynamic",  # Cho phép thêm / xóa hàng trực tiếp trên giao diện bảng
+        num_rows="dynamic",
         key=editor_dynamic_key,
     )
 
     col_save, col_reload = st.columns([2, 1])
 
     with col_save:
-        if st.button(
-            f"💾 Lưu danh mục {cat_title} vĩnh viễn",
-            type="primary",
-            key=f"btn_save_{cat_key}",
-        ):
+        if st.button(f"💾 Lưu danh mục {cat_title} vĩnh viễn", type="primary", key=f"btn_save_{cat_key}"):
             st.session_state[session_key] = edited_df
-            if save_category_data(cat_key, edited_df):
-                st.success("✅ Dữ liệu danh mục đã được lưu vĩnh viễn!")
+            if save_category_data(cat_key, edited_df, cat_title):
+                st.success("✅ Dữ liệu danh mục đã được lưu vĩnh viễn trên CSDL Supabase!")
 
     with col_reload:
-        if st.button("🔄 Tải lại dữ liệu", key=f"btn_reload_{cat_key}"):
-            st.session_state[session_key] = load_category_data(
-                cat_key, default_df
-            )
+        if st.button("🔄 Tải lại dữ liệu từ CSDL", key=f"btn_reload_{cat_key}"):
+            st.session_state[session_key] = load_category_data(cat_key, default_df)
             st.session_state[version_key] += 1
-            st.success("🔄 Đã tải lại dữ liệu mới nhất!")
+            st.success("🔄 Đã tải lại dữ liệu mới nhất từ CSDL!")
             st.rerun()
 
 
-# Điều hướng chính
+# ---------------------------------------------------------
+# ĐIỀU HƯỚNG CHÍNH
+# ---------------------------------------------------------
 def render_category_management():
-    st.subheader("Chi tiết danh mục hệ thống")
+    st.subheader("Chi tiết danh mục hệ thống (Kết nối CSDL Supabase)")
 
     cat_list = load_category_list()
 
-    with st.expander(
-        "⚙️ QUẢN LÝ DANH SÁCH DANH MỤC (THÊM / ĐỔI TÊN / XÓA TAB DANH MỤC)",
-        expanded=False,
-    ):
+    with st.expander("⚙️ QUẢN LÝ DANH SÁCH DANH MỤC (THÊM / ĐỔI TÊN / XÓA TAB DANH MỤC)", expanded=False):
         col_cat_add, col_cat_edit, col_cat_del = st.columns(3)
 
         with col_cat_add:
             st.markdown("**➕ Thêm danh mục mới**")
-            new_cat_title = st.text_input(
-                "Tên danh mục mới:", key="input_new_cat_title"
-            )
+            new_cat_title = st.text_input("Tên danh mục mới:", key="input_new_cat_title")
             if st.button("Tạo Danh mục Mới", key="btn_create_cat"):
                 if new_cat_title:
                     import re
-
-                    new_key = re.sub(
-                        r"\W+", "_", new_cat_title.lower()
-                    ).strip("_")
+                    new_key = re.sub(r"\W+", "_", new_cat_title.lower()).strip("_")
                     if not new_key:
                         new_key = f"cat_{len(cat_list) + 1}"
 
-                    cat_list[new_key] = f"📁 {new_cat_title}"
-                    save_category_list(cat_list)
+                    cat_title_full = f"📁 {new_cat_title}"
+                    init_df = pd.DataFrame({"Mã": ["M01"], "Tên " + new_cat_title: ["Nội dung 01"], "Ghi chú": [""]})
 
-                    init_df = pd.DataFrame({
-                        "Mã": ["M01"],
-                        "Tên " + new_cat_title: ["Nội dung 01"],
-                        "Ghi chú": [""],
-                    })
-                    save_category_data(new_key, init_df)
-
-                    st.success(f"Đã tạo danh mục '{new_cat_title}'!")
+                    save_category_data(new_key, init_df, cat_title_full)
+                    st.success(f"Đã tạo danh mục '{new_cat_title}' trên CSDL!")
                     st.rerun()
 
         with col_cat_edit:
@@ -470,13 +446,11 @@ def render_category_management():
                 format_func=lambda x: cat_list[x],
                 key="sel_edit_cat",
             )
-            renamed_cat_title = st.text_input(
-                "Tên mới danh mục:", key="input_rename_cat_title"
-            )
+            renamed_cat_title = st.text_input("Tên mới danh mục:", key="input_rename_cat_title")
             if st.button("Cập nhật Tên", key="btn_rename_cat"):
                 if renamed_cat_title and selected_edit_key:
-                    cat_list[selected_edit_key] = renamed_cat_title
-                    save_category_list(cat_list)
+                    current_df = load_category_data(selected_edit_key, pd.DataFrame())
+                    save_category_data(selected_edit_key, current_df, renamed_cat_title)
                     st.success("Đã đổi tên danh mục thành công!")
                     st.rerun()
 
@@ -488,13 +462,10 @@ def render_category_management():
                 format_func=lambda x: cat_list[x],
                 key="sel_del_cat",
             )
-            if st.button(
-                "Xóa Danh Mục Này", type="primary", key="btn_delete_cat"
-            ):
+            if st.button("Xóa Danh Mục Này", type="primary", key="btn_delete_cat"):
                 if selected_del_key in cat_list:
-                    del cat_list[selected_del_key]
-                    save_category_list(cat_list)
-                    st.success("Đã xóa danh mục khỏi hệ thống!")
+                    delete_category_from_db(selected_del_key)
+                    st.success("Đã xóa danh mục khỏi CSDL Supabase!")
                     st.rerun()
 
     st.write("")
