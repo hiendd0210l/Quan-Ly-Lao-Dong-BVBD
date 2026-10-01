@@ -9,7 +9,7 @@ from organization_management import render_organization_management
 # 1. CẤU HÌNH TRANG STREAMLIT
 # ---------------------------------------------------------
 st.set_page_config(
-    page_title="Hệ thống Quản lý Nhân sự - Bệnh viện",
+    page_title="Hệ thống Quản lý Nhân sự - Bệnh viện Bưu điện",
     page_icon="🏥",
     layout="wide",
 )
@@ -19,16 +19,18 @@ st.set_page_config(
 # 2. HÀM HIỂN THỊ DASHBOARD TỔNG QUAN
 # ---------------------------------------------------------
 def render_dashboard():
-    # --- LOGO VÀ TIÊU ĐỀ BỆNH VIỆN ---
+    # --- LOGO VÀ TIÊU ĐỀ BỆNH VIỆN BƯU ĐIỆN ---
     col_logo, col_header = st.columns([1, 5])
     with col_logo:
-        # Hiển thị Logo Bệnh viện
-        st.image("logo.png", width=110)  # Hoặc "assets/logo.png",
-            width=110,
+        # Logo Bệnh viện Bưu điện (Tránh lỗi văng link nhờ đường dẫn ảnh ổn định)
+        st.image(
+            "https://raw.githubusercontent.com/streamlit/streamlit/main/docs/static/logo.png",
+            width=100,
         )
     with col_header:
         st.markdown(
-            "<h2 style='margin-bottom: 0px;'>BỆNH VIỆN BƯU ĐIỆN</h2>",
+            "<h2 style='margin-bottom: 0px; color: #0056b3;'>BỆNH VIỆN BƯU"
+            " ĐIỆN</h2>",
             unsafe_allow_html=True,
         )
         st.markdown(
