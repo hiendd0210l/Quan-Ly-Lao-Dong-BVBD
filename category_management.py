@@ -7,13 +7,12 @@ from supabase import create_client
 
 
 # ---------------------------------------------------------
-# KẾT NỐI SUPABASE (LƯU TRỮ ĐÁM MÂY VĨNH VIỄN)
+# KẾT NỐI SUPABASE
 # ---------------------------------------------------------
 @st.cache_resource
 def init_supabase():
     try:
         url = st.secrets["SUPABASE_URL"]
-        # Ưu tiên lấy Secret key/Service role key nếu có, nếu không lấy Supabase key
         key = st.secrets.get("SUPABASE_KEY") or st.secrets.get(
             "SUPABASE_SERVICE_KEY"
         )
@@ -26,7 +25,7 @@ def init_supabase():
 supabase = init_supabase()
 
 # ---------------------------------------------------------
-# MẪU DỮ LIỆU NGHỊ ĐỊNH 204/2004/NĐ-CP (BẢNG LƯƠNG SỐ 3)
+# MẪU DỮ LIỆU CHUẨN NGHỊ ĐỊNH 204/2004/NĐ-CP (BẢNG LƯƠNG SỐ 3)
 # ---------------------------------------------------------
 DF_NGACH_LUONG_ND204 = pd.DataFrame({
     "Mã Ngạch": [
@@ -58,12 +57,12 @@ DF_NGACH_LUONG_ND204 = pd.DataFrame({
     "Bậc 4": [7.28, 5.42, 3.33, 2.46, 2.10],
     "Bậc 5": [7.64, 5.76, 3.66, 2.66, 2.25],
     "Bậc 6": [8.00, 6.10, 3.99, 2.86, 2.40],
-    "Bậc 7": [None, 6.44, 4.32, 3.06, 2.55],
-    "Bậc 8": [None, 6.78, 4.65, 3.26, 2.70],
-    "Bậc 9": [None, None, 4.98, 3.46, 2.85],
-    "Bậc 10": [None, None, None, 3.66, 3.00],
-    "Bậc 11": [None, None, None, 3.86, 3.15],
-    "Bậc 12": [None, None, None, 4.06, 3.30],
+    "Bậc 7": ["", 6.44, 4.32, 3.06, 2.55],
+    "Bậc 8": ["", 6.78, 4.65, 3.26, 2.70],
+    "Bậc 9": ["", "", 4.98, 3.46, 2.85],
+    "Bậc 10": ["", "", "", 3.66, 3.00],
+    "Bậc 11": ["", "", "", 3.86, 3.15],
+    "Bậc 12": ["", "", "", 4.06, 3.30],
 })
 
 # Danh sách danh mục mặc định ban đầu
@@ -163,7 +162,7 @@ DEFAULT_CATEGORIES = {
 
 
 # ---------------------------------------------------------
-# HÀM TƯƠNG TÁC CSDL SUPABASE
+# HÀM XỬ LÝ DỮ LIỆU CSDL SUPABASE
 # ---------------------------------------------------------
 def load_category_list():
     if not supabase:
@@ -175,7 +174,6 @@ def load_category_list():
         if data and len(data) > 0:
             return {item["cat_key"]: item["title"] for item in data}
         else:
-            # Khởi tạo dữ liệu mặc định vào CSDL nếu bảng trống
             initial_list = {}
             for k, v in DEFAULT_CATEGORIES.items():
                 initial_list[k] = v["title"]
@@ -211,7 +209,6 @@ def save_category_data(cat_key, df, title=None):
         return False
 
     try:
-        # Làm sạch giá trị NaN trước khi chuyển đổi JSON
         clean_df = df.fillna("")
         records = clean_df.to_dict(orient="records")
         payload = {"cat_key": cat_key, "content": records}
@@ -236,7 +233,7 @@ def delete_category_from_db(cat_key):
 
 
 # ---------------------------------------------------------
-# HÀM XỬ LÝ BẢNG VÀ XUẤT FILE EXCEL
+# HÀM TẠO FILE EXCEL VÀ CẤU HÌNH CỘT
 # ---------------------------------------------------------
 def convert_df_to_excel(df):
     output = io.BytesIO()
@@ -290,17 +287,23 @@ def render_single_category(cat_key, cat_title):
     if version_key not in st.session_state:
         st.session_state[version_key] = 0
 
-    # 1. NHẬP DỮ LIỆU VÀ XUẤT FILE EXCEL MẪU
+    # 1. TẢI FILE EXCEL MẪU & NHẬP DỮ LIỆU
     with st.expander("📊 NHẬP DỮ LIỆU TỪ EXCEL / TẢI FILE EXCEL MẪU", expanded=False):
         col_ex1, col_ex2 = st.columns([1, 2])
 
         with col_ex1:
             st.markdown("**1. Tải file Excel mẫu (.xlsx):**")
-            excel_data = convert_df_to_excel(st.session_state[session_key])
+            # NẾU LÀ NGẠCH LƯƠNG: Xuất đúng mẫu chuẩn 12 bậc của Nghị định 204
+            if cat_key == "ngach_luong":
+                sample_excel_df = DF_NGACH_LUONG_ND204
+            else:
+                sample_excel_df = st.session_state[session_key]
+
+            excel_data = convert_df_to_excel(sample_excel_df)
             st.download_button(
                 label="📥 Tải xuống File mẫu (.xlsx)",
                 data=excel_data,
-                file_name=f"Mau_{cat_key}.xlsx",
+                file_name=f"Mau_BangLuong_ND204_{cat_key}.xlsx" if cat_key == "ngach_luong" else f"Mau_{cat_key}.xlsx",
                 mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
                 key=f"btn_dl_{cat_key}",
             )
@@ -431,7 +434,7 @@ def render_single_category(cat_key, cat_title):
         key=editor_dynamic_key,
     )
 
-    col_save, col_reload = st.columns([2, 1])
+    col_save, col_reload, col_reset = st.columns([2, 1, 1])
 
     with col_save:
         if st.button(f"💾 Lưu danh mục {cat_title} vĩnh viễn", type="primary", key=f"btn_save_{cat_key}"):
@@ -440,11 +443,21 @@ def render_single_category(cat_key, cat_title):
                 st.success("✅ Dữ liệu danh mục đã được lưu vĩnh viễn vào CSDL Supabase!")
 
     with col_reload:
-        if st.button("🔄 Tải lại dữ liệu từ CSDL", key=f"btn_reload_{cat_key}"):
+        if st.button("🔄 Tải lại từ CSDL", key=f"btn_reload_{cat_key}"):
             st.session_state[session_key] = load_category_data(cat_key, default_df)
             st.session_state[version_key] += 1
             st.success("🔄 Đã tải lại dữ liệu mới nhất từ CSDL!")
             st.rerun()
+
+    # Nút bấm RESET dành riêng cho Ngạch bậc lương NĐ 204
+    with col_reset:
+        if cat_key == "ngach_luong":
+            if st.button("⚡ Reset mẫu NĐ 204", key=f"btn_reset_204_{cat_key}"):
+                st.session_state[session_key] = DF_NGACH_LUONG_ND204
+                save_category_data(cat_key, DF_NGACH_LUONG_ND204, cat_title)
+                st.session_state[version_key] += 1
+                st.success("✅ Đã khôi phục bảng lương về chuẩn Nghị định 204!")
+                st.rerun()
 
 
 # ---------------------------------------------------------
@@ -455,7 +468,7 @@ def render_category_management():
 
     cat_list = load_category_list()
 
-    with st.expander("⚙️ QUẢN LÝ DANH SÁCH DANH MỤC (THÊM / ĐỔI TÊN / XÓA TAB DANH MỤC)", expanded=False):
+    with st.expander("⚙️️ QUẢN LÝ DANH SÁCH DANH MỤC (THÊM / ĐỔI TÊN / XÓA TAB DANH MỤC)", expanded=False):
         col_cat_add, col_cat_edit, col_cat_del = st.columns(3)
 
         with col_cat_add:
@@ -476,7 +489,7 @@ def render_category_management():
                     st.rerun()
 
         with col_cat_edit:
-            st.markdown("**✏️️ Đổi tên danh mục**")
+            st.markdown("**✏️ Đổi tên danh mục**")
             selected_edit_key = st.selectbox(
                 "Chọn danh mục đổi tên:",
                 options=list(cat_list.keys()),
