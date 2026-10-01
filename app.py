@@ -3,8 +3,8 @@ import plotly.express as px
 import streamlit as st
 
 from category_management import render_category_management
-from organization_management import render_organization_management
 from employee_management import render_employee_management
+from organization_management import render_organization_management
 
 # ---------------------------------------------------------
 # 1. CẤU HÌNH TRANG STREAMLIT
@@ -24,7 +24,6 @@ def render_dashboard():
     col_logo, col_header = st.columns([2, 5])
     with col_logo:
         try:
-            # Kích thước logo đã tăng lên 300px
             st.image("logo.png", width=300)
         except Exception:
             st.markdown("🏥")
@@ -37,7 +36,7 @@ def render_dashboard():
         )
         st.markdown(
             "<h3 style='color: #555; margin-top: 5px; font-size: 22px;'>HỆ"
-            " THỐNG QUẢN TRỊ NHÂN SỰ (HRM)</h5>",
+            " THỐNG QUẢN TRỊ NHÂN SỰ & CÁN BỘ</h3>",
             unsafe_allow_html=True,
         )
 
@@ -63,7 +62,6 @@ def render_dashboard():
     col_chart, col_table = st.columns([3, 2])
 
     with col_chart:
-        # Biểu đồ cột đứng (Vertical Bar Chart)
         fig_bar = px.bar(
             df_chuc_danh,
             x="Chức danh công tác",
@@ -173,7 +171,7 @@ def render_dashboard():
 
 
 # ---------------------------------------------------------
-# 3. THANH MENU BÊN TRÁI (SIDEBAR) VỚI ICONS ĐẦY ĐỦ
+# 3. THANH MENU BÊN TRÁI (SIDEBAR)
 # ---------------------------------------------------------
 st.sidebar.title("MENU QUẢN TRỊ CÁN BỘ")
 st.sidebar.markdown("---")
@@ -211,16 +209,7 @@ elif "2. 📁 Danh mục Hệ thống" in menu_choice:
     render_category_management()
 elif "3. 🏢 Quản lý Cơ cấu Tổ chức" in menu_choice:
     render_organization_management()
-else:
-    st.title(menu_choice)
-    st.info("Chức năng đang được nâng cấp và phát triển.")
-    if "1. 📊 Dashboard Tổng quan" in menu_choice:
-    render_dashboard()
-elif "2. 📁 Danh mục Hệ thống" in menu_choice:
-    render_category_management()
-elif "3. 🏢 Quản lý Cơ cấu Tổ chức" in menu_choice:
-    render_organization_management()
-elif "4. 👨‍⚕️ Quản lý Hồ sơ Cán bộ" in menu_choice:
+elif "4. 👨‍⚕️️ Quản lý Hồ sơ Cán bộ" in menu_choice:
     render_employee_management()
 else:
     st.title(menu_choice)
