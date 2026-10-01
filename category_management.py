@@ -1,24 +1,35 @@
 import io
 import json
 import os
+import time
 import pandas as pd
 import streamlit as st
 from supabase import create_client
 
 
 # ---------------------------------------------------------
-# KẾT NỐI SUPABASE
+# KẾT NỐI SUPABASE AN TOÀN
 # ---------------------------------------------------------
 @st.cache_resource
 def init_supabase():
     try:
-        url = st.secrets["SUPABASE_URL"]
-        key = st.secrets.get("SUPABASE_KEY") or st.secrets.get(
-            "SUPABASE_SERVICE_KEY"
-        )
+        url = st.secrets.get("SUPABASE_URL", "").strip()
+        key = (
+            st.secrets.get("SUPABASE_KEY")
+            or st.secrets.get("SUPABASE_SERVICE_KEY", "")
+        ).strip()
+
+        if not url or not key:
+            st.warning("⚠️ Chưa cấu hình SUPABASE_URL hoặc SUPABASE_KEY.")
+            return None
+
+        # Đảm bảo URL đúng định dạng
+        if not url.startswith("https://"):
+            url = f"https://{url}"
+
         return create_client(url, key)
     except Exception as e:
-        st.error(f"⚠ Chưa cấu hình secrets SUPABASE_URL / SUPABASE_KEY: {e}")
+        st.error(f"⚠ Lỗi kết nối Supabase: {e}")
         return None
 
 
