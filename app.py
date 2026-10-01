@@ -16,14 +16,35 @@ st.set_page_config(
 
 
 # ---------------------------------------------------------
-# 2. HÀM HIỂN THỊ DASHBOARD TỔNG QUAN (BIỂU ĐỒ CỘT ĐỨNG)
+# 2. HÀM HIỂN THỊ DASHBOARD TỔNG QUAN
 # ---------------------------------------------------------
 def render_dashboard():
+    # --- LOGO VÀ TIÊU ĐỀ BỆNH VIỆN ---
+    col_logo, col_header = st.columns([1, 5])
+    with col_logo:
+        # Hiển thị Logo Bệnh viện
+        st.image(
+            "https://img.freepik.com/free-vector/hospital-logo-template_23-2148092289.jpg",
+            width=110,
+        )
+    with col_header:
+        st.markdown(
+            "<h2 style='margin-bottom: 0px;'>BỆNH VIỆN BƯU ĐIỆN</h2>",
+            unsafe_allow_html=True,
+        )
+        st.markdown(
+            "<h4 style='color: #555; margin-top: 0px;'>HỆ THỐNG QUẢN TRỊ"
+            " NHÂN SỰ & CÁN BỘ</h4>",
+            unsafe_allow_html=True,
+        )
+
+    st.markdown("---")
+
+    # --- 1. THỐNG KÊ CƠ CẤU LAO ĐỘNG THEO CHỨC DANH ---
     st.subheader(
         "📊 THỐNG KÊ CƠ CẤU LAO ĐỘNG THEO CHỨC DANH TOÀN BỆNH VIỆN"
     )
 
-    # Dữ liệu chức danh công tác
     df_chuc_danh = pd.DataFrame({
         "Chức danh công tác": [
             "Bác sĩ",
@@ -44,7 +65,7 @@ def render_dashboard():
             df_chuc_danh,
             x="Chức danh công tác",
             y="Số lượng",
-            text="Số lượng",  # Hiển thị số lượng trực tiếp trên đỉnh cột
+            text="Số lượng",
             color="Chức danh công tác",
             labels={
                 "Số lượng": "Số lượng (người)",
@@ -61,8 +82,8 @@ def render_dashboard():
             xaxis_title="Chức danh công tác",
             yaxis_title="Số lượng (Người)",
             showlegend=False,
-            height=420,
-            margin=dict(l=20, r=20, t=50, b=20),
+            height=380,
+            margin=dict(l=20, r=20, t=40, b=20),
         )
 
         st.plotly_chart(fig_bar, use_container_width=True)
@@ -86,9 +107,70 @@ def render_dashboard():
         st.write("")
         st.metric("Tổng số Cán bộ - Nhân viên", "1,250 người")
 
+    st.markdown("---")
+
+    # --- 2. THỐNG KÊ CẢNH BÁO THỜI HẠN NHÂN SỰ ---
+    st.subheader("⚠️ THỐNG KÊ CẢNH BÁO THỜI HẠN NHÂN SỰ")
+
+    c1, c2, c3, c4, c5 = st.columns(5)
+    with c1:
+        st.metric("Đến hạn nâng lương", "18 cán bộ", "In 30 ngày")
+    with c2:
+        st.metric("Hết hạn hợp đồng", "12 người", "In 30 ngày")
+    with c3:
+        st.metric("Nâng thâm niên nghề", "05 người", "In 30 ngày")
+    with c4:
+        st.metric("Gia hạn CCHN / Bổ sung", "08 bác sĩ", "Chưa cập nhật")
+    with c5:
+        st.metric("Đến tuổi nghỉ hưu", "03 cán bộ", "In 6 tháng")
+
+    st.write("")
+    st.markdown("##### 🔔 Danh sách Cán bộ đến hạn cần xử lý")
+
+    df_canh_bao = pd.DataFrame({
+        "Mã CB": ["CB0012", "CB0145", "CB0233", "CB0089", "CB0512"],
+        "Họ và Tên": [
+            "Nguyễn Văn An",
+            "Trần Thị Bích",
+            "Lê Hoàng Cường",
+            "Phạm Minh Đức",
+            "Vũ Thị Dung",
+        ],
+        "Khoa / Phòng": [
+            "Khoa Khám bệnh",
+            "Khoa Cấp cứu",
+            "Khoa Ngoại tổng hợp",
+            "Khoa Dược",
+            "Phòng Tổ chức Cán bộ",
+        ],
+        "Loại cảnh báo": [
+            "Đến hạn nâng bậc lương",
+            "Hết hạn HĐLĐ 36 tháng",
+            "Đến hạn nâng thâm niên",
+            "Gia hạn CCHN Y tế",
+            "Thông báo chuẩn bị nghỉ hưu",
+        ],
+        "Thời hạn": [
+            "15/10/2026",
+            "20/10/2026",
+            "25/10/2026",
+            "05/11/2026",
+            "12/12/2026",
+        ],
+        "Trạng thái": [
+            "Chưa xử lý",
+            "Chưa xử lý",
+            "Đang duyệt",
+            "Chưa xử lý",
+            "Đã thông báo",
+        ],
+    })
+
+    st.dataframe(df_canh_bao, use_container_width=True, hide_index=True)
+
 
 # ---------------------------------------------------------
-# 3. THANH MENU BÊN TRÁI (SIDEBAR)
+# 3. THANH MENU BÊN TRÁI (SIDEBAR) VỚI ICONS ĐẦY ĐỦ
 # ---------------------------------------------------------
 st.sidebar.title("MENU QUẢN TRỊ CÁN BỘ")
 st.sidebar.markdown("---")
@@ -96,35 +178,35 @@ st.sidebar.markdown("---")
 menu_choice = st.sidebar.radio(
     "Chọn chức năng:",
     [
-        "1. Dashboard Tổng quan",
-        "2. Danh mục Hệ thống",
-        "3. Quản lý Cơ cấu Tổ chức",
-        "4. Quản lý Hồ sơ Cán bộ",
-        "5. Quản lý Tuyển dụng",
-        "6. Quản lý Hợp đồng Lao động",
-        "7. Điều động - Điều chuyển",
-        "8. Chấm công - Ca trực - Phân lịch",
-        "9. Quản lý Nghỉ phép & Miễn trực",
-        "10. Quản lý Tiền lương & Phụ cấp",
-        "11. Quản lý Chứng chỉ Hành nghề Y",
-        "12. Quản lý Đào tạo & Bồi dưỡng CML",
-        "13. Đánh giá & Đánh giá An toàn Bệnh viện",
-        "14. Thi đua - Khen thưởng & Kỷ luật",
-        "15. Quản lý Sức khỏe & Báo hiểm",
-        "16. Quản lý Tài sản - Quy trình",
-        "17. Báo cáo - Thống kê - CSDL Y tế",
-        "18. Quản lý Hệ thống & Phân quyền",
+        "1. 📊 Dashboard Tổng quan",
+        "2. 📁 Danh mục Hệ thống",
+        "3. 🏢 Quản lý Cơ cấu Tổ chức",
+        "4. 👨‍⚕️ Quản lý Hồ sơ Cán bộ",
+        "5. 📑 Quản lý Tuyển dụng",
+        "6. 📝 Quản lý Hợp đồng Lao động",
+        "7. 🔄 Điều động - Điều chuyển",
+        "8. ⏰ Chấm công - Ca trực - Phân lịch",
+        "9. 🏖️ Quản lý Nghỉ phép & Miễn trực",
+        "10. 💰 Quản lý Tiền lương & Phụ cấp",
+        "11. 🩺 Quản lý Chứng chỉ Hành nghề Y",
+        "12. 🎓 Quản lý Đào tạo & Bồi dưỡng CML",
+        "13. 🏆 Đánh giá & Đánh giá An toàn Bệnh viện",
+        "14. 🎖️ Thi đua - Khen thưởng & Kỷ luật",
+        "15. 🏥 Quản lý Sức khỏe & Báo hiểm",
+        "16. 📋 Quản lý Tài sản - Quy trình",
+        "17. 📈 Báo cáo - Thống kê - CSDL Y tế",
+        "18. ⚙️ Quản lý Hệ thống & Phân quyền",
     ],
 )
 
 # ---------------------------------------------------------
 # 4. ĐIỀU HƯỚNG MÀN HÌNH THEO MENU
 # ---------------------------------------------------------
-if menu_choice == "1. Dashboard Tổng quan":
+if "1. 📊 Dashboard Tổng quan" in menu_choice:
     render_dashboard()
-elif menu_choice == "2. Danh mục Hệ thống":
+elif "2. 📁 Danh mục Hệ thống" in menu_choice:
     render_category_management()
-elif menu_choice == "3. Quản lý Cơ cấu Tổ chức":
+elif "3. 🏢 Quản lý Cơ cấu Tổ chức" in menu_choice:
     render_organization_management()
 else:
     st.title(menu_choice)
