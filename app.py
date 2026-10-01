@@ -36,7 +36,7 @@ def render_dashboard():
         )
         st.markdown(
             "<h3 style='color: #555; margin-top: 5px; font-size: 22px;'>HỆ"
-            " THỐNG QUẢN TRỊ NHÂN SỰ & CÁN BỘ</h3>",
+            " THỐNG QUẢN TRỊ NHÂN SỰ (HRM)</h5>",
             unsafe_allow_html=True,
         )
 
