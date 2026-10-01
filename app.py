@@ -76,48 +76,74 @@ def render_dashboard():
     # -------------------------------------------------------------------------
     # PHẦN 2: THỐNG KÊ CƠ CẤU LAO ĐỘNG THEO CHỨC DANH + BIỂU ĐỒ
     # -------------------------------------------------------------------------
-    st.subheader("📊 THỐNG KÊ CƠ CẤU LAO ĐỘNG THEO CHỨC DANH TOÀN BỆNH VIỆN")
+    def render_dashboard():
+    st.subheader(
+        "📊 THỐNG KÊ CƠ CẤU LAO ĐỘNG THEO CHỨC DANH TOÀN BỆNH VIỆN"
+    )
 
-    # Dữ liệu thống kê cơ cấu chức danh
-    df_structure = pd.DataFrame({
-        "Chức danh": [
+    # 1. Khởi tạo dữ liệu chức danh
+    df_chuc_danh = pd.DataFrame({
+        "Chức danh công tác": [
             "Bác sĩ",
             "Điều dưỡng",
             "Kỹ thuật viên",
             "Dược sĩ",
             "Hành chính / Khác",
         ],
-        "Số lượng (Người)": [385, 520, 150, 45, 150],
+        "Số lượng": [485, 518, 158, 43, 46],
+        "Tỷ lệ (%)": [38.8, 41.4, 12.7, 3.4, 3.7],
     })
-    df_structure["Tỷ lệ (%)"] = (
-        df_structure["Số lượng (Người)"] / df_structure["Số lượng (Người)"].sum() * 100
-    ).round(1)
 
-    col_chart, col_table = st.columns([5, 4])
+    col_chart, col_table = st.columns([3, 2])
 
     with col_chart:
-        fig = px.pie(
-            df_structure,
-            values="Số lượng (Người)",
-            names="Chức danh",
-            title="Tỷ lệ phân bổ Nhân sự theo Chức danh",
-            hole=0.4,
-            color_discrete_sequence=px.colors.qualitative.Pastel,
+        # 2. Tạo biểu đồ cột đứng (Vertical Bar Chart)
+        fig_bar = px.bar(
+            df_chuc_danh,
+            x="Chức danh công tác",
+            y="Số lượng",
+            text="Số lượng",  # Hiển thị số lượng trực tiếp trên đỉnh cột
+            color="Chức danh công tác",  # Màu sắc phân biệt cho từng chức danh
+            labels={
+                "Số lượng": "Số lượng (người)",
+                "Chức danh công tác": "Chức danh công tác",
+            },
         )
-        fig.update_traces(textposition="inside", textinfo="percent+label")
-        st.plotly_chart(fig, use_container_width=True)
+
+        # 3. Tùy chỉnh hiển thị chi tiết số liệu trên đỉnh cột
+        fig_bar.update_traces(
+            textposition="outside", texttemplate="%{text} người", cliponaxis=False
+        )
+
+        fig_bar.update_layout(
+            title="<b>Tỷ lệ phân bổ Nhân sự theo Chức danh</b>",
+            xaxis_title="Chức danh công tác",
+            yaxis_title="Số lượng (Người)",
+            showlegend=False,  # Ẩn chú thích bên phải vì tên đã hiển thị dưới trục X
+            height=420,
+            margin=dict(l=20, r=20, t=50, b=20),
+        )
+
+        st.plotly_chart(fig_bar, use_container_width=True)
 
     with col_table:
-        st.markdown("#### 📋 Số liệu chi tiết")
+        st.markdown("##### 📋 Số liệu chi tiết")
         st.dataframe(
-            df_structure,
+            df_chuc_danh,
             use_container_width=True,
             hide_index=True,
+            column_config={
+                "Chức danh công tác": st.column_config.Column(width="medium"),
+                "Số lượng": st.column_config.NumberColumn(
+                    "Số lượng (Người)", format="%d"
+                ),
+                "Tỷ lệ (%)": st.column_config.NumberColumn(
+                    "Tỷ lệ (%)", format="%.1f%%"
+                ),
+            },
         )
-        total_staff = df_structure["Số lượng (Người)"].sum()
-        st.metric(label="Tổng số Cán bộ - Nhân viên", value=f"{total_staff:,} người")
-
-    st.divider()
+        st.write("")
+        st.metric("Tổng số Cán bộ - Nhân viên", "1,250 người")
 
     # -------------------------------------------------------------------------
     # PHẦN 3: THỐNG KÊ CÁC CẢNH BÁO THỜI HẠN CỦA NGƯỜI LAO ĐỘNG
