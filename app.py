@@ -23,8 +23,7 @@ def render_dashboard():
     col_logo, col_header = st.columns([1, 5])
     with col_logo:
         # Hiển thị Logo Bệnh viện
-        st.image(
-            "https://img.freepik.com/free-vector/hospital-logo-template_23-2148092289.jpg",
+        st.image("logo.png", width=110)  # Hoặc "assets/logo.png",
             width=110,
         )
     with col_header:
