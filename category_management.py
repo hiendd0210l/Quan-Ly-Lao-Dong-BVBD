@@ -541,7 +541,7 @@ def render_single_category(cat_key, cat_title):
 # ĐIỀU HƯỚNG CHÍNH
 # ---------------------------------------------------------
 def render_category_management():
-    st.subheader("Chi tiết danh mục hệ thống (Nghị định 204/2004/NĐ-CP)")
+    st.subheader("CHI TIẾT DANH MỤC QUẢN TRỊ HỆ THỐNG")
 
     cat_list = load_category_list()
 
