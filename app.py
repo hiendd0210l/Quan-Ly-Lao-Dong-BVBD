@@ -76,7 +76,8 @@ def render_dashboard():
     # -------------------------------------------------------------------------
     # PHẦN 2: THỐNG KÊ CƠ CẤU LAO ĐỘNG THEO CHỨC DANH + BIỂU ĐỒ
     # -------------------------------------------------------------------------
-    def render_dashboard():
+   
+def render_dashboard():
     st.subheader(
         "📊 THỐNG KÊ CƠ CẤU LAO ĐỘNG THEO CHỨC DANH TOÀN BỆNH VIỆN"
     )
@@ -103,14 +104,14 @@ def render_dashboard():
             x="Chức danh công tác",
             y="Số lượng",
             text="Số lượng",  # Hiển thị số lượng trực tiếp trên đỉnh cột
-            color="Chức danh công tác",  # Màu sắc phân biệt cho từng chức danh
+            color="Chức danh công tác",  # Màu sắc phân biệt từng cột
             labels={
                 "Số lượng": "Số lượng (người)",
                 "Chức danh công tác": "Chức danh công tác",
             },
         )
 
-        # 3. Tùy chỉnh hiển thị chi tiết số liệu trên đỉnh cột
+        # 3. Định dạng hiển thị chữ trên đầu cột
         fig_bar.update_traces(
             textposition="outside", texttemplate="%{text} người", cliponaxis=False
         )
@@ -119,7 +120,7 @@ def render_dashboard():
             title="<b>Tỷ lệ phân bổ Nhân sự theo Chức danh</b>",
             xaxis_title="Chức danh công tác",
             yaxis_title="Số lượng (Người)",
-            showlegend=False,  # Ẩn chú thích bên phải vì tên đã hiển thị dưới trục X
+            showlegend=False,  # Ẩn chú thích bên phải vì tên đã nằm dưới trục X
             height=420,
             margin=dict(l=20, r=20, t=50, b=20),
         )
