@@ -4,6 +4,7 @@ import streamlit as st
 
 from category_management import render_category_management
 from organization_management import render_organization_management
+from employee_management import render_employee_management
 
 # ---------------------------------------------------------
 # 1. CẤU HÌNH TRANG STREAMLIT
@@ -210,6 +211,17 @@ elif "2. 📁 Danh mục Hệ thống" in menu_choice:
     render_category_management()
 elif "3. 🏢 Quản lý Cơ cấu Tổ chức" in menu_choice:
     render_organization_management()
+else:
+    st.title(menu_choice)
+    st.info("Chức năng đang được nâng cấp và phát triển.")
+    if "1. 📊 Dashboard Tổng quan" in menu_choice:
+    render_dashboard()
+elif "2. 📁 Danh mục Hệ thống" in menu_choice:
+    render_category_management()
+elif "3. 🏢 Quản lý Cơ cấu Tổ chức" in menu_choice:
+    render_organization_management()
+elif "4. 👨‍⚕️ Quản lý Hồ sơ Cán bộ" in menu_choice:
+    render_employee_management()
 else:
     st.title(menu_choice)
     st.info("Chức năng đang được nâng cấp và phát triển.")
