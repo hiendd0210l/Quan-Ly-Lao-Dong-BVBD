@@ -5,23 +5,68 @@ import pandas as pd
 import streamlit as st
 from supabase import create_client
 
+
 # ---------------------------------------------------------
-# KẾT NỐI SUPABASE
+# KẾT NỐI SUPABASE (LƯU TRỮ ĐÁM MÂY VĨNH VIỄN)
 # ---------------------------------------------------------
 @st.cache_resource
 def init_supabase():
     try:
         url = st.secrets["SUPABASE_URL"]
-        key = st.secrets["SUPABASE_KEY"]
+        # Ưu tiên lấy Secret key/Service role key nếu có, nếu không lấy Supabase key
+        key = st.secrets.get("SUPABASE_KEY") or st.secrets.get(
+            "SUPABASE_SERVICE_KEY"
+        )
         return create_client(url, key)
     except Exception as e:
-        st.error(f"⚠️️ Chưa cấu hình secrets SUPABASE_URL / SUPABASE_KEY: {e}")
+        st.error(f"⚠ Chưa cấu hình secrets SUPABASE_URL / SUPABASE_KEY: {e}")
         return None
 
 
 supabase = init_supabase()
 
-# Danh sách danh mục mặc định ban đầu (Dùng khởi tạo lần đầu nếu DB trống)
+# ---------------------------------------------------------
+# MẪU DỮ LIỆU NGHỊ ĐỊNH 204/2004/NĐ-CP (BẢNG LƯƠNG SỐ 3)
+# ---------------------------------------------------------
+DF_NGACH_LUONG_ND204 = pd.DataFrame({
+    "Mã Ngạch": [
+        "1.08.01.01",
+        "1.08.01.02",
+        "1.08.01.03",
+        "1.08.01.12",
+        "1.08.01.13",
+    ],
+    "Tên Ngạch lương": [
+        "Bác sĩ cao cấp / Dược sĩ cao cấp (Hạng I)",
+        "Bác sĩ chính / Dược sĩ chính (Hạng II)",
+        "Bác sĩ / Dược sĩ (Hạng III)",
+        "Y sĩ / Điều dưỡng / KTV (Hạng IV)",
+        "Dược sĩ trung cấp / Y sĩ trung cấp",
+    ],
+    "Nhóm ngạch": ["A3.1", "A2.1", "A1", "B", "C1"],
+    "Loại ngạch": [
+        "Viên chức loại A3",
+        "Viên chức loại A2",
+        "Viên chức loại A1",
+        "Viên chức loại B",
+        "Viên chức loại C",
+    ],
+    "Bậc tối đa": [6, 8, 9, 12, 12],
+    "Bậc 1": [6.20, 4.40, 2.34, 1.86, 1.65],
+    "Bậc 2": [6.56, 4.74, 2.67, 2.06, 1.80],
+    "Bậc 3": [6.92, 5.08, 3.00, 2.26, 1.95],
+    "Bậc 4": [7.28, 5.42, 3.33, 2.46, 2.10],
+    "Bậc 5": [7.64, 5.76, 3.66, 2.66, 2.25],
+    "Bậc 6": [8.00, 6.10, 3.99, 2.86, 2.40],
+    "Bậc 7": [None, 6.44, 4.32, 3.06, 2.55],
+    "Bậc 8": [None, 6.78, 4.65, 3.26, 2.70],
+    "Bậc 9": [None, None, 4.98, 3.46, 2.85],
+    "Bậc 10": [None, None, None, 3.66, 3.00],
+    "Bậc 11": [None, None, None, 3.86, 3.15],
+    "Bậc 12": [None, None, None, 4.06, 3.30],
+})
+
+# Danh sách danh mục mặc định ban đầu
 DEFAULT_CATEGORIES = {
     "chuc_danh": {
         "title": "📌 Chức danh & Mã ngạch",
@@ -111,24 +156,14 @@ DEFAULT_CATEGORIES = {
         }),
     },
     "ngach_luong": {
-        "title": "🏛️ Ngạch bậc lương cơ bản",
-        "df": pd.DataFrame({
-            "Mã Ngạch": ["V.08.01.01", "V.08.01.02", "V.08.01.03", "V.08.05.12"],
-            "Tên Ngạch lương": [
-                "Bác sĩ cao cấp (Hạng I)",
-                "Bác sĩ chính (Hạng II)",
-                "Bác sĩ (Hạng III)",
-                "Điều dưỡng (Hạng III)",
-            ],
-            "Hệ số Bậc 1": ["6.20", "4.40", "2.34", "2.34"],
-            "Bậc tối đa": ["8", "8", "12", "12"],
-        }),
+        "title": "🏛️ Ngạch bậc lương cơ bản (NĐ 204/2004)",
+        "df": DF_NGACH_LUONG_ND204,
     },
 }
 
 
 # ---------------------------------------------------------
-# HÀM XỬ LÝ DỮ LIỆU CSDL SUPABASE
+# HÀM TƯƠNG TÁC CSDL SUPABASE
 # ---------------------------------------------------------
 def load_category_list():
     if not supabase:
@@ -140,7 +175,7 @@ def load_category_list():
         if data and len(data) > 0:
             return {item["cat_key"]: item["title"] for item in data}
         else:
-            # Khởi tạo mặc định nếu CSDL trống
+            # Khởi tạo dữ liệu mặc định vào CSDL nếu bảng trống
             initial_list = {}
             for k, v in DEFAULT_CATEGORIES.items():
                 initial_list[k] = v["title"]
@@ -176,7 +211,9 @@ def save_category_data(cat_key, df, title=None):
         return False
 
     try:
-        records = df.to_dict(orient="records")
+        # Làm sạch giá trị NaN trước khi chuyển đổi JSON
+        clean_df = df.fillna("")
+        records = clean_df.to_dict(orient="records")
         payload = {"cat_key": cat_key, "content": records}
         if title:
             payload["title"] = title
@@ -199,7 +236,7 @@ def delete_category_from_db(cat_key):
 
 
 # ---------------------------------------------------------
-# CÁC HÀM BỔ TRỢ GIAO DIỆN
+# HÀM XỬ LÝ BẢNG VÀ XUẤT FILE EXCEL
 # ---------------------------------------------------------
 def convert_df_to_excel(df):
     output = io.BytesIO()
@@ -235,7 +272,7 @@ def build_safe_column_config(df):
 
 
 # ---------------------------------------------------------
-# GIAO DIỆN QUẢN LÝ TỪNG DANH MỤC
+# GIAO DIỆN QUẢN LÝ DANH MỤC
 # ---------------------------------------------------------
 def render_single_category(cat_key, cat_title):
     session_key = f"df_{cat_key}"
@@ -253,13 +290,13 @@ def render_single_category(cat_key, cat_title):
     if version_key not in st.session_state:
         st.session_state[version_key] = 0
 
-    # 1. NHẬP / EXPORT EXCEL
+    # 1. NHẬP DỮ LIỆU VÀ XUẤT FILE EXCEL MẪU
     with st.expander("📊 NHẬP DỮ LIỆU TỪ EXCEL / TẢI FILE EXCEL MẪU", expanded=False):
         col_ex1, col_ex2 = st.columns([1, 2])
 
         with col_ex1:
             st.markdown("**1. Tải file Excel mẫu (.xlsx):**")
-            excel_data = convert_df_to_excel(st.session_state[session_key].head(2))
+            excel_data = convert_df_to_excel(st.session_state[session_key])
             st.download_button(
                 label="📥 Tải xuống File mẫu (.xlsx)",
                 data=excel_data,
@@ -294,7 +331,7 @@ def render_single_category(cat_key, cat_title):
                         st.session_state[session_key] = new_df
                         save_category_data(cat_key, new_df, cat_title)
                         st.session_state[version_key] += 1
-                        st.success("✅ Đã cập nhật thành công lên CSDL!")
+                        st.success("✅ Đã cập nhật nối tiếp thành công!")
                         st.rerun()
 
                 with col_b2:
@@ -302,7 +339,7 @@ def render_single_category(cat_key, cat_title):
                         st.session_state[session_key] = df_excel
                         save_category_data(cat_key, df_excel, cat_title)
                         st.session_state[version_key] += 1
-                        st.success("✅ Đã ghi đè dữ liệu thành công lên CSDL!")
+                        st.success("✅ Đã ghi đè dữ liệu thành công!")
                         st.rerun()
             except Exception as e:
                 st.error(f"Lỗi đọc file: {e}")
@@ -323,7 +360,7 @@ def render_single_category(cat_key, cat_title):
                     st.rerun()
 
         with c_edit:
-            st.markdown("**✏️️ Đổi tên cột tiêu đề**")
+            st.markdown("**✏️ Đổi tên cột tiêu đề**")
             cols = list(st.session_state[session_key].columns)
             col_to_rename = st.selectbox("Chọn cột cần đổi:", cols, key=f"sel_rename_{cat_key}")
             renamed_name = st.text_input("Tên mới:", key=f"txt_rename_{cat_key}")
@@ -347,7 +384,7 @@ def render_single_category(cat_key, cat_title):
                     st.success(f"Đã xóa cột '{col_to_del}'")
                     st.rerun()
 
-    # 3. KHU VỰC XÓA HÀNG
+    # 3. QUẢN LÝ XÓA HÀNG
     with st.expander("🗑️ XÓA HÀNG TRONG BẢNG DANH MỤC", expanded=False):
         current_df_del = st.session_state[session_key]
         if not current_df_del.empty:
@@ -379,7 +416,7 @@ def render_single_category(cat_key, cat_title):
         else:
             st.info("Bảng hiện tại chưa có dữ liệu để xóa.")
 
-    # 4. BẢNG HIỂN THỊ VÀ CHỈNH SỬA
+    # 4. BẢNG DỮ LIỆU HIỂN THỊ
     st.write("")
     current_df = st.session_state[session_key].fillna("")
     safe_column_config = build_safe_column_config(current_df)
@@ -400,7 +437,7 @@ def render_single_category(cat_key, cat_title):
         if st.button(f"💾 Lưu danh mục {cat_title} vĩnh viễn", type="primary", key=f"btn_save_{cat_key}"):
             st.session_state[session_key] = edited_df
             if save_category_data(cat_key, edited_df, cat_title):
-                st.success("✅ Dữ liệu danh mục đã được lưu vĩnh viễn trên CSDL Supabase!")
+                st.success("✅ Dữ liệu danh mục đã được lưu vĩnh viễn vào CSDL Supabase!")
 
     with col_reload:
         if st.button("🔄 Tải lại dữ liệu từ CSDL", key=f"btn_reload_{cat_key}"):
@@ -414,7 +451,7 @@ def render_single_category(cat_key, cat_title):
 # ĐIỀU HƯỚNG CHÍNH
 # ---------------------------------------------------------
 def render_category_management():
-    st.subheader("Chi tiết danh mục hệ thống (Kết nối CSDL Supabase)")
+    st.subheader("Chi tiết danh mục hệ thống (Nghị định 204/2004/NĐ-CP)")
 
     cat_list = load_category_list()
 
@@ -435,11 +472,11 @@ def render_category_management():
                     init_df = pd.DataFrame({"Mã": ["M01"], "Tên " + new_cat_title: ["Nội dung 01"], "Ghi chú": [""]})
 
                     save_category_data(new_key, init_df, cat_title_full)
-                    st.success(f"Đã tạo danh mục '{new_cat_title}' trên CSDL!")
+                    st.success(f"Đã tạo danh mục '{new_cat_title}'!")
                     st.rerun()
 
         with col_cat_edit:
-            st.markdown("**✏️ Đổi tên danh mục**")
+            st.markdown("**✏️️ Đổi tên danh mục**")
             selected_edit_key = st.selectbox(
                 "Chọn danh mục đổi tên:",
                 options=list(cat_list.keys()),
