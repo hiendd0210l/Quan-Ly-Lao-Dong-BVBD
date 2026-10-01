@@ -20,23 +20,23 @@ st.set_page_config(
 # ---------------------------------------------------------
 def render_dashboard():
     # --- LOGO VÀ TIÊU ĐỀ BỆNH VIỆN BƯU ĐIỆN ---
-    col_logo, col_header = st.columns([1, 5])
+    col_logo, col_header = st.columns([2, 5])
     with col_logo:
-        # Đọc trực tiếp file logo.png trong thư mục dự án GitHub
         try:
-            st.image("logo.png", width=110)
+            # Kích thước logo đã tăng lên 300px
+            st.image("logo.png", width=300)
         except Exception:
-            st.markdown("🏥")  # Fallback hiển thị biểu tượng y tế nếu file lỗi
+            st.markdown("🏥")
 
     with col_header:
         st.markdown(
-            "<h2 style='margin-bottom: 0px; color: #0056b3;'>BỆNH VIỆN BƯU"
-            " ĐIỆN</h2>",
+            "<h1 style='margin-bottom: 0px; color: #0056b3; font-size:"
+            " 36px;'>BỆNH VIỆN BƯU ĐIỆN</h1>",
             unsafe_allow_html=True,
         )
         st.markdown(
-            "<h4 style='color: #555; margin-top: 0px;'>HỆ THỐNG QUẢN TRỊ"
-            " NHÂN SỰ & CÁN BỘ</h4>",
+            "<h3 style='color: #555; margin-top: 5px; font-size: 22px;'>HỆ"
+            " THỐNG QUẢN TRỊ NHÂN SỰ & CÁN BỘ</h3>",
             unsafe_allow_html=True,
         )
 
@@ -67,7 +67,7 @@ def render_dashboard():
             df_chuc_danh,
             x="Chức danh công tác",
             y="Số lượng",
-            text="Số lượng",  # Hiển thị số lượng trực tiếp trên đỉnh cột
+            text="Số lượng",
             color="Chức danh công tác",
             labels={
                 "Số lượng": "Số lượng (người)",
