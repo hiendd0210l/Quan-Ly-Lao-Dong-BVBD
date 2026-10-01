@@ -22,11 +22,12 @@ def render_dashboard():
     # --- LOGO VÀ TIÊU ĐỀ BỆNH VIỆN BƯU ĐIỆN ---
     col_logo, col_header = st.columns([1, 5])
     with col_logo:
-        # Logo Bệnh viện Bưu điện (Tránh lỗi văng link nhờ đường dẫn ảnh ổn định)
-        st.image(
-            "https://raw.githubusercontent.com/streamlit/streamlit/main/docs/static/logo.png",
-            width=100,
-        )
+        # Đọc trực tiếp file logo.png trong thư mục dự án GitHub
+        try:
+            st.image("logo.png", width=110)
+        except Exception:
+            st.markdown("🏥")  # Fallback hiển thị biểu tượng y tế nếu file lỗi
+
     with col_header:
         st.markdown(
             "<h2 style='margin-bottom: 0px; color: #0056b3;'>BỆNH VIỆN BƯU"
@@ -66,7 +67,7 @@ def render_dashboard():
             df_chuc_danh,
             x="Chức danh công tác",
             y="Số lượng",
-            text="Số lượng",
+            text="Số lượng",  # Hiển thị số lượng trực tiếp trên đỉnh cột
             color="Chức danh công tác",
             labels={
                 "Số lượng": "Số lượng (người)",
