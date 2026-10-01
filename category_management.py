@@ -7,7 +7,7 @@ from supabase import create_client
 
 
 # ---------------------------------------------------------
-# KẾT NỐI SUPABASE AN TOÀN (BẮT LỖI DNS / MẠNG)
+# KẾT NỐI SUPABASE AN TOÀN
 # ---------------------------------------------------------
 @st.cache_resource
 def init_supabase():
@@ -168,7 +168,7 @@ DEFAULT_CATEGORIES = {
 
 
 # ---------------------------------------------------------
-# HÀM XỬ LÝ DỮ LIỆU CSDL SUPABASE (THÊM TRY/EXCEPT AN TOÀN)
+# HÀM XỬ LÝ DỮ LIỆU CSDL SUPABASE (ĐỒNG BỘ ĐẦY ĐỦ CÁC TAB)
 # ---------------------------------------------------------
 def load_category_list():
     default_list = {
@@ -181,7 +181,13 @@ def load_category_list():
         res = supabase.table("categories").select("cat_key, title").execute()
         data = res.data
         if data and len(data) > 0:
-            return {item["cat_key"]: item["title"] for item in data}
+            db_list = {item["cat_key"]: item["title"] for item in data}
+            # Tự động bổ sung các danh mục mặc định còn thiếu vào DB
+            for def_k, def_v in DEFAULT_CATEGORIES.items():
+                if def_k not in db_list:
+                    save_category_data(def_k, def_v["df"], def_v["title"])
+                    db_list[def_k] = def_v["title"]
+            return db_list
         else:
             for k, v in DEFAULT_CATEGORIES.items():
                 save_category_data(k, v["df"], v["title"])
@@ -211,9 +217,6 @@ def load_category_data(cat_key, default_df):
 
 def save_category_data(cat_key, df, title=None):
     if not supabase:
-        st.warning(
-            "⚠️ Chưa kết nối Supabase, dữ liệu tạm lưu trên bộ nhớ phiên."
-        )
         return False
 
     try:
@@ -597,7 +600,7 @@ def render_category_management():
                     st.rerun()
 
         with col_cat_del:
-            st.markdown("**🗑️️ Xóa danh mục**")
+            st.markdown("**🗑️ Xóa danh mục**")
             selected_del_key = st.selectbox(
                 "Chọn danh mục cần xóa:",
                 options=list(cat_list.keys()),
