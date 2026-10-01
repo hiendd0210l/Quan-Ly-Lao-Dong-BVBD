@@ -24,6 +24,7 @@ def render_dashboard():
     col_logo, col_header = st.columns([2, 5])
     with col_logo:
         try:
+            # Tải file logo.png trong thư mục dự án GitHub
             st.image("logo.png", width=300)
         except Exception:
             st.markdown("🏥")
@@ -62,6 +63,7 @@ def render_dashboard():
     col_chart, col_table = st.columns([3, 2])
 
     with col_chart:
+        # Biểu đồ cột đứng (Vertical Bar Chart)
         fig_bar = px.bar(
             df_chuc_danh,
             x="Chức danh công tác",
@@ -201,15 +203,15 @@ menu_choice = st.sidebar.radio(
 )
 
 # ---------------------------------------------------------
-# 4. ĐIỀU HƯỚNG MÀN HÌNH THEO MENU
+# 4. ĐIỀU HƯỚNG MÀN HÌNH THEO MENU AN TOÀN
 # ---------------------------------------------------------
-if "1. 📊 Dashboard Tổng quan" in menu_choice:
+if "Dashboard Tổng quan" in menu_choice:
     render_dashboard()
-elif "2. 📁 Danh mục Hệ thống" in menu_choice:
+elif "Danh mục Hệ thống" in menu_choice:
     render_category_management()
-elif "3. 🏢 Quản lý Cơ cấu Tổ chức" in menu_choice:
+elif "Quản lý Cơ cấu Tổ chức" in menu_choice:
     render_organization_management()
-elif "4. 👨‍⚕️️ Quản lý Hồ sơ Cán bộ" in menu_choice:
+elif "Quản lý Hồ sơ Cán bộ" in menu_choice:
     render_employee_management()
 else:
     st.title(menu_choice)
