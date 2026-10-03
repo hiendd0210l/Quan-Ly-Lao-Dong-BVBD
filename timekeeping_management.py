@@ -40,14 +40,6 @@ DEFAULT_TIMEKEEPING_RULES = [
     {"Ký hiệu": "T", "Diễn giải": "1 ngày trực ngoài giờ hành chính"},
     {"Ký hiệu": "B", "Diễn giải": "½ ngày nghỉ bù trực hưởng nguyên lương"},
     {"Ký hiệu": "BB", "Diễn giải": "1 ngày nghỉ bù trực hưởng nguyên lương"},
-    {
-        "Ký hiệu": "XTX",
-        "Diễn giải": "1 ngày công hành chính + 1 ngày trực ngoài giờ",
-    },
-    {
-        "Ký hiệu": "BTB",
-        "Diễn giải": "1 ngày nghỉ bù trực + 1 ngày trực ngoài giờ",
-    },
     {"Ký hiệu": "P", "Diễn giải": "½ ngày nghỉ phép"},
     {"Ký hiệu": "PP", "Diễn giải": "1 ngày nghỉ phép"},
     {"Ký hiệu": "H", "Diễn giải": "½ ngày đi học"},
@@ -255,25 +247,23 @@ def generate_timekeeping_template(
     all_symbols_dict = []
     for idx, (_, r_row) in enumerate(df_rules.iterrows(), start=1):
         sym = str(r_row.get("Ký hiệu", "")).strip().upper()
-        if sym:
+        if sym and sym != "TT":  # Loại bỏ ký hiệu TT nếu có
             all_symbols_dict.append({
                 "sym": sym,
                 "desc": r_row.get("Diễn giải", ""),
             })
 
-    # Tự động sinh danh sách các tổ hợp ghép 2 ký tự (Sáng - Chiều)
+    # Tự động sinh danh sách các tổ hợp ghép 2 ký tự (Loại bỏ tuyệt đối "TT")
     single_codes = ["X", "B", "P", "H", "CT", "Ô", "O", "R", "K", "T"]
     existing_syms = {item["sym"] for item in all_symbols_dict}
 
     for c1 in single_codes:
         for c2 in single_codes:
             pair = f"{c1}{c2}"
-            if pair not in existing_syms:
+            if pair != "TT" and pair not in existing_syms:
                 all_symbols_dict.append({
                     "sym": pair,
-                    "desc": (
-                        f"Tổ hợp ghép: Sáng ({c1}) - Chiều ({c2})"
-                    ),
+                    "desc": f"Tổ hợp ghép: Sáng ({c1}) - Chiều ({c2})",
                 })
                 existing_syms.add(pair)
 
@@ -404,10 +394,7 @@ def generate_timekeeping_template(
             if day_fills.get(d_num):
                 cell.fill = day_fills[d_num]
 
-    # ---------------------------------------------------------
-    # DATA VALIDATION: THAM CHIẾU VÙNG DỮ LIỆU ĐỘNG TRONG SHEET QuyUocKyHieu
-    # ---------------------------------------------------------
-    # Tham chiếu trực tiếp đến danh sách ký hiệu tại Cột B trong sheet QuyUocKyHieu
+    # DATA VALIDATION: Tham chiếu trực tiếp đến Bảng Quy Ước (Không bao gồm TT)
     rules_range_formula = f"QuyUocKyHieu!$B$4:$B${last_rule_row}"
 
     dv = DataValidation(
@@ -421,13 +408,13 @@ def generate_timekeeping_template(
 
     dv.errorTitle = "❌ KÝ HIỆU KHÔNG HỢP LỆ"
     dv.error = (
-        "Ký hiệu nhập vào không nằm trong Bảng quy ước hoặc Tổ hợp ghép Sáng -"
-        " Chiều hợp lệ!"
+        "Ký hiệu nhập vào không đúng hoặc bị thừa ký tự T (Không được nhập"
+        " 'TT')!"
     )
     dv.promptTitle = "💡 QUY TẮC CHẤM CÔNG"
     dv.prompt = (
-        "Trái: Buổi Sáng | Phải: Buổi Chiều (Ví dụ: XB = Sáng làm việc, Chiều"
-        " nghỉ bù)."
+        "Ký hiệu 'T' đại diện cho 1 ngày trực. Bất kỳ tổ hợp nào chứa 'TT' là"
+        " không hợp lệ."
     )
 
     ws_main.add_data_validation(dv)
@@ -501,26 +488,8 @@ def generate_timekeeping_template(
 
 
 # ---------------------------------------------------------
-# 5. TÍNH TOÁN DỮ LIỆU TỔNG HỢP (GHÉP 2 KÝ TỰ SÁNG - CHIỀU)
+# 5. TÍNH TOÁN DỮ LIỆU TỔNG HỢP (KÝ TỰ "T" TÍNH 1 TRỰC)
 # ---------------------------------------------------------
-def process_single_char(char_sym, res_dict):
-    c = char_sym.upper()
-    if c == "X":
-        res_dict["c_cong"] += 0.5
-    elif c == "T":
-        res_dict["c_truc"] += 0.5
-    elif c == "B":
-        res_dict["c_b"] += 0.5
-    elif c == "P":
-        res_dict["c_p"] += 0.5
-    elif c in ["Ô", "O", "CO"]:
-        res_dict["c_o"] += 0.5
-    elif c in ["H", "CT", "R"]:
-        res_dict["c_cong"] += 0.5
-    elif c == "KO":
-        res_dict["c_khl"] += 0.5
-
-
 def parse_and_summarize(df_tk):
     if df_tk.empty:
         return pd.DataFrame()
@@ -544,44 +513,52 @@ def parse_and_summarize(df_tk):
 
         for d in day_cols:
             val = str(row.get(d, "")).strip().upper()
-            if not val:
+            if not val or "TT" in val:  # Bỏ qua ô trống hoặc ô vi phạm TT
                 continue
 
-            if val == "XX":
-                res["c_cong"] += 1.0
-            elif val == "X":
-                res["c_cong"] += 0.5
-            elif val == "T":
+            # 1. Nếu trong ô có chữ 'T' -> Tính tròn 1 ca trực
+            if "T" in val:
                 res["c_truc"] += 1.0
-            elif val == "BB":
+
+            # 2. Xử lý các thành phần công / nghỉ khác đi kèm trong ô
+            # Loại bỏ ký tự T để xét các ký tự còn lại (ví dụ XT -> X, TB -> B)
+            rem = val.replace("T", "")
+
+            if rem == "XX":
+                res["c_cong"] += 1.0
+            elif rem == "X":
+                res["c_cong"] += 0.5
+            elif rem == "BB":
                 res["c_b"] += 1.0
-            elif val == "B":
+            elif rem == "B":
                 res["c_b"] += 0.5
-            elif val == "XTX":
-                res["c_cong"] += 1.0
-                res["c_truc"] += 1.0
-            elif val == "BTB":
-                res["c_b"] += 1.0
-                res["c_truc"] += 1.0
-            elif val == "PP":
+            elif rem == "PP":
                 res["c_p"] += 1.0
-            elif val == "P":
+            elif rem == "P":
                 res["c_p"] += 0.5
-            elif val in ["ÔÔ", "OO", "COCO"]:
+            elif rem in ["ÔÔ", "OO", "COCO"]:
                 res["c_o"] += 1.0
-            elif val in ["Ô", "O", "CO"]:
+            elif rem in ["Ô", "O", "CO"]:
                 res["c_o"] += 0.5
-            elif val in ["HH", "CTCT", "RR"]:
+            elif rem in ["HH", "CTCT", "RR"]:
                 res["c_cong"] += 1.0
-            elif val in ["H", "CT", "R"]:
+            elif rem in ["H", "CT", "R"]:
                 res["c_cong"] += 0.5
-            elif val == "KO":
+            elif rem == "KO":
                 res["c_khl"] += 1.0
-            elif len(val) == 2:
-                left_char = val[0]
-                right_char = val[1]
-                process_single_char(left_char, res)
-                process_single_char(right_char, res)
+            elif len(rem) == 2:
+                # Trường hợp ghép 2 ký tự khác (ví dụ: XB, PX...)
+                for char in rem:
+                    if char == "X":
+                        res["c_cong"] += 0.5
+                    elif char == "B":
+                        res["c_b"] += 0.5
+                    elif char == "P":
+                        res["c_p"] += 0.5
+                    elif char in ["Ô", "O"]:
+                        res["c_o"] += 0.5
+                    elif char in ["H", "R"]:
+                        res["c_cong"] += 0.5
 
         rec = row.to_dict()
         rec["Tổng ngày công"] = res["c_cong"]
@@ -705,7 +682,12 @@ def render_timekeeping_management():
                     if btn_add_r:
                         if not f_kh or not f_dg:
                             st.error(
-                                "⚠️️ Vui lòng nhập Ký hiệu và Diễn giải!"
+                                "⚠️ Vui lòng nhập Ký hiệu và Diễn giải!"
+                            )
+                        elif f_kh.upper() == "TT":
+                            st.error(
+                                "❌ Ký hiệu 'TT' không hợp lệ (Không được phép"
+                                " thừa ký tự T)!"
                             )
                         else:
                             new_r = {
