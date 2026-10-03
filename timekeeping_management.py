@@ -217,7 +217,7 @@ def save_timekeeping_db(df, month, year):
 
 
 # ---------------------------------------------------------
-# 4. TẠO FILE EXCEL MẪU CHẤP NHẬN CHỮ HOA & CHỮ THƯỜNG
+# 4. TẠO FILE EXCEL MẪU TỰ ĐỘNG CHẤP NHẬN HOA/THƯỜNG VÀ CHẶN KÝ TỰ LẠ
 # ---------------------------------------------------------
 def generate_timekeeping_template(
     df_emp_unit, month, year, unit_name, df_rules
@@ -273,7 +273,6 @@ def generate_timekeeping_template(
     ws_rules.column_dimensions["B"].width = 15
     ws_rules.column_dimensions["C"].width = 50
 
-    # Khóa Sheet Quy ước (Read-only)
     ws_rules.protection.sheet = True
     ws_rules.protection.password = "123456"
 
@@ -286,18 +285,15 @@ def generate_timekeeping_template(
         else "TOÀN BỆNH VIỆN"
     )
 
-    # Hàng 1: Dòng đơn vị góc trái
     ws_main["A1"] = f"BỆNH VIỆN BƯU ĐIỆN - {unit_title}"
     ws_main["A1"].font = Font(name="Arial", size=11, bold=True, color="003366")
     ws_main["A1"].alignment = Alignment(horizontal="left", vertical="center")
 
     num_days = calendar.monthrange(year, month)[1]
 
-    # Tiêu đề cột Dòng 4
     day_headers = [f"{d:02d}/{month:02d}" for d in range(1, num_days + 1)]
     headers = ["STT", "Mã NV", "Họ và tên", "Chức vụ"] + day_headers
 
-    # Hàng 2: Tiêu đề Bảng Chấm công căn giữa
     title_text = f"BẢNG CHẤM CÔNG THÁNG {month}/{year} CỦA {unit_title}"
     last_col_letter = openpyxl.utils.get_column_letter(len(headers))
     ws_main.merge_cells(f"A2:{last_col_letter}2")
@@ -306,7 +302,6 @@ def generate_timekeeping_template(
     cell_title.font = Font(name="Arial", size=14, bold=True, color="003366")
     cell_title.alignment = Alignment(horizontal="center", vertical="center")
 
-    # Format Header Hàng 4
     header_fill_default = PatternFill(
         start_color="1F4E79", end_color="1F4E79", fill_type="solid"
     )
@@ -345,7 +340,6 @@ def generate_timekeeping_template(
         cell.alignment = Alignment(horizontal="center", vertical="center")
         cell.border = thin_border
 
-    # Ghi danh sách nhân viên từ Hàng 5
     num_emp = len(df_emp_unit)
     for idx, (_, row) in enumerate(df_emp_unit.iterrows(), start=1):
         current_row = 4 + idx
@@ -376,8 +370,7 @@ def generate_timekeeping_template(
             if day_fills.get(d_num):
                 cell.fill = day_fills[d_num]
 
-    # --- KHẮC PHỤC CHÍNH XÁC: SỬ DỤNG CÔNG THỨC CUSTOM ĐỂ KHÔNG PHÂN BIỆT HOA/THƯỜNG ---
-    # Công thức kiểm tra: ISNUMBER(MATCH(UPPER(E5), QuyUocKyHieu!$B$4:$B$24, 0))
+    # --- CÔNG THỨC CUSTOM: CHO PHÉP NHẬP CẢ HOA/THƯỜNG & CHẶN KÝ TỰ LẠ ---
     rule_range_ref = f"QuyUocKyHieu!$B$4:$B${3 + num_rules}"
     custom_formula = f"=ISNUMBER(MATCH(UPPER(E5), {rule_range_ref}, 0))"
 
@@ -393,11 +386,12 @@ def generate_timekeeping_template(
     dv.errorTitle = "❌ KÝ HIỆU KHÔNG HỢP LỆ"
     dv.error = (
         "Ký hiệu nhập vào KHÔNG CÓ trong Bảng quy ước!\nVui lòng nhập đúng"
-        " ký hiệu được phép."
+        " ký hiệu chuẩn."
     )
     dv.promptTitle = "💡 LƯU Ý CHẤM CÔNG"
     dv.prompt = (
-        "Có thể nhập chữ HOA hoặc chữ THƯỜNG (Ví dụ: xx hoặc XX đều hợp lệ)."
+        "Nhập chữ thường hoặc chữ hoa đều được (Khi tải file lên hệ thống sẽ tự"
+        " động chuyển thành chữ IN HOA)."
     )
 
     ws_main.add_data_validation(dv)
@@ -412,7 +406,6 @@ def generate_timekeeping_template(
     # --- KHU VỰC CHỮ KÝ IN ẤN A4 NẰM NGANG ---
     sign_row_header = (4 + num_emp) + 3
 
-    # Cột Trái: NGƯỜI CHẤM CÔNG
     ws_main.merge_cells(f"A{sign_row_header}:D{sign_row_header}")
     cell_sign_left = ws_main[f"A{sign_row_header}"]
     cell_sign_left.value = "NGƯỜI CHẤM CÔNG"
@@ -421,7 +414,6 @@ def generate_timekeeping_template(
         horizontal="center", vertical="center"
     )
 
-    # Cột Phải: LÃNH ĐẠO KHOA/PHÒNG/TRUNG TÂM
     sign_right_start_col = openpyxl.utils.get_column_letter(len(headers) - 6)
     sign_right_end_col = openpyxl.utils.get_column_letter(len(headers))
 
@@ -435,7 +427,6 @@ def generate_timekeeping_template(
         horizontal="center", vertical="center"
     )
 
-    # Hàng chữ ký nhỏ bên dưới
     sign_sub_row = sign_row_header + 1
     ws_main.merge_cells(f"A{sign_sub_row}:D{sign_sub_row}")
     cell_sub_left = ws_main[f"A{sign_sub_row}"]
@@ -453,7 +444,6 @@ def generate_timekeeping_template(
         horizontal="center", vertical="center"
     )
 
-    # Cài đặt độ rộng cột
     ws_main.column_dimensions["A"].width = 6
     ws_main.column_dimensions["B"].width = 12
     ws_main.column_dimensions["C"].width = 25
@@ -462,7 +452,6 @@ def generate_timekeeping_template(
         col_letter = openpyxl.utils.get_column_letter(col_idx)
         ws_main.column_dimensions[col_letter].width = 9
 
-    # Cấu hình Trang in A4 Khổ Ngang (Landscape)
     ws_main.page_setup.orientation = ws_main.ORIENTATION_LANDSCAPE
     ws_main.page_setup.paperSize = ws_main.PAPERSIZE_A4
     ws_main.page_setup.fitToWidth = 1
@@ -765,7 +754,7 @@ def render_timekeeping_management():
                 if "STT" in df_up.columns:
                     df_up.drop(columns=["STT"], inplace=True)
 
-                # Chuyển đổi toàn bộ ô chấm công sang IN HOA
+                # TỰ ĐỘNG CHUYỂN TẤT CẢ CÁC Ô CHẤM CÔNG SANG IN HOA CHUẨN
                 day_cols = [
                     c
                     for c in df_up.columns
@@ -775,8 +764,8 @@ def render_timekeeping_management():
                     df_up[d] = df_up[d].astype(str).str.upper()
 
                 st.write(
-                    "📌 **Dữ liệu đọc từ file chấm công (Đã chuyển thành IN"
-                    " HOA):**"
+                    "📌 **Dữ liệu đọc từ file chấm công (Hệ thống đã tự động"
+                    " chuẩn hóa toàn bộ thành chữ IN HOA):**"
                 )
                 st.dataframe(df_up.head(10), use_container_width=True)
 
