@@ -217,7 +217,7 @@ def save_timekeeping_db(df, month, year):
 
 
 # ---------------------------------------------------------
-# 4. TẠO FILE EXCEL MẪU TỰ ĐỘNG CHẤP NHẬN HOA/THƯỜNG VÀ CHẶN KÝ TỰ LẠ
+# 4. TẠO FILE EXCEL MẪU TỰ ĐỘNG CHUẨN ĐỊNH DẠNG & BỐ CỤC
 # ---------------------------------------------------------
 def generate_timekeeping_template(
     df_emp_unit, month, year, unit_name, df_rules
@@ -285,23 +285,35 @@ def generate_timekeeping_template(
         else "TOÀN BỆNH VIỆN"
     )
 
-    ws_main["A1"] = f"BỆNH VIỆN BƯU ĐIỆN - {unit_title}"
-    ws_main["A1"].font = Font(name="Arial", size=11, bold=True, color="003366")
+    # 1. HÀNG 1: BỆNH VIỆN BƯU ĐIỆN (IN HOA, KHÔNG ĐẬM)
+    ws_main["A1"] = "BỆNH VIỆN BƯU ĐIỆN"
+    ws_main["A1"].font = Font(
+        name="Arial", size=11, bold=False, color="000000"
+    )  # Không in đậm
     ws_main["A1"].alignment = Alignment(horizontal="left", vertical="center")
+
+    # 2. HÀNG 2: TÊN KHOA / PHÒNG / TRUNG TÂM (ĐẶT NGAY DƯỚI HÀNG 1, IN HOA, IN ĐẬM)
+    ws_main["A2"] = unit_title
+    ws_main["A2"].font = Font(
+        name="Arial", size=11, bold=True, color="003366"
+    )  # In đậm
+    ws_main["A2"].alignment = Alignment(horizontal="left", vertical="center")
 
     num_days = calendar.monthrange(year, month)[1]
 
+    # 3. HÀNG 3: TIÊU ĐỀ BẢNG CHẤM CÔNG CĂN GIỮA
     day_headers = [f"{d:02d}/{month:02d}" for d in range(1, num_days + 1)]
     headers = ["STT", "Mã NV", "Họ và tên", "Chức vụ"] + day_headers
 
     title_text = f"BẢNG CHẤM CÔNG THÁNG {month}/{year} CỦA {unit_title}"
     last_col_letter = openpyxl.utils.get_column_letter(len(headers))
-    ws_main.merge_cells(f"A2:{last_col_letter}2")
-    cell_title = ws_main["A2"]
+    ws_main.merge_cells(f"A3:{last_col_letter}3")
+    cell_title = ws_main["A3"]
     cell_title.value = title_text
     cell_title.font = Font(name="Arial", size=14, bold=True, color="003366")
     cell_title.alignment = Alignment(horizontal="center", vertical="center")
 
+    # 4. HÀNG 5: HEADER BẢNG
     header_fill_default = PatternFill(
         start_color="1F4E79", end_color="1F4E79", fill_type="solid"
     )
@@ -332,8 +344,10 @@ def generate_timekeeping_template(
         else:
             day_fills[d] = None
 
+    ws_main.append([])  # Hàng 4 trống
+
     for c_idx, h_text in enumerate(headers, start=1):
-        cell = ws_main.cell(row=4, column=c_idx)
+        cell = ws_main.cell(row=5, column=c_idx)
         cell.value = h_text
         cell.font = header_font
         cell.fill = header_fill_default
@@ -342,7 +356,7 @@ def generate_timekeeping_template(
 
     num_emp = len(df_emp_unit)
     for idx, (_, row) in enumerate(df_emp_unit.iterrows(), start=1):
-        current_row = 4 + idx
+        current_row = 5 + idx
 
         ws_main.cell(row=current_row, column=1, value=idx)
         ws_main.cell(row=current_row, column=2, value=row.get("Mã NV", ""))
@@ -370,9 +384,18 @@ def generate_timekeeping_template(
             if day_fills.get(d_num):
                 cell.fill = day_fills[d_num]
 
-    # --- CÔNG THỨC CUSTOM: CHO PHÉP NHẬP CẢ HOA/THƯỜNG & CHẶN KÝ TỰ LẠ ---
+    # --- TỰ ĐỘNG CHẤP NHẬN GHÉP KÝ TỰ ĐƠN VÀO DATA VALIDATION ---
+    single_syms = ["X", "B", "P", "H", "Ô", "O", "R", "K", "C", "T"]
+    all_allowed = set(valid_symbols)
+
+    for s1 in single_syms:
+        for s2 in single_syms:
+            all_allowed.add(s1 + s2)
+
+    formula_str = f'"{",".join(list(all_allowed))}"'
+
     rule_range_ref = f"QuyUocKyHieu!$B$4:$B${3 + num_rules}"
-    custom_formula = f"=ISNUMBER(MATCH(UPPER(E5), {rule_range_ref}, 0))"
+    custom_formula = f"=ISNUMBER(MATCH(UPPER(E6), {rule_range_ref}, 0))"
 
     dv = DataValidation(
         type="custom",
@@ -386,25 +409,25 @@ def generate_timekeeping_template(
     dv.errorTitle = "❌ KÝ HIỆU KHÔNG HỢP LỆ"
     dv.error = (
         "Ký hiệu nhập vào KHÔNG CÓ trong Bảng quy ước!\nVui lòng nhập đúng"
-        " ký hiệu chuẩn."
+        " ký hiệu chuẩn hoặc ghép 2 ký tự công (Sáng - Chiều)."
     )
-    dv.promptTitle = "💡 LƯU Ý CHẤM CÔNG"
+    dv.promptTitle = "💡 QUY TẮC CHẤM CÔNG"
     dv.prompt = (
-        "Nhập chữ thường hoặc chữ hoa đều được (Khi tải file lên hệ thống sẽ tự"
-        " động chuyển thành chữ IN HOA)."
+        "Trái: Buổi Sáng | Phải: Buổi Chiều (Ví dụ: XP = Sáng làm việc, Chiều"
+        " nghỉ phép)."
     )
 
     ws_main.add_data_validation(dv)
 
-    first_data_row = 5
-    last_data_row = 4 + (num_emp if num_emp > 0 else 50)
+    first_data_row = 6
+    last_data_row = 5 + (num_emp if num_emp > 0 else 50)
     first_day_col = openpyxl.utils.get_column_letter(5)
     last_day_col = openpyxl.utils.get_column_letter(4 + num_days)
 
     dv.add(f"{first_day_col}{first_data_row}:{last_day_col}{last_data_row}")
 
     # --- KHU VỰC CHỮ KÝ IN ẤN A4 NẰM NGANG ---
-    sign_row_header = (4 + num_emp) + 3
+    sign_row_header = last_data_row + 3
 
     ws_main.merge_cells(f"A{sign_row_header}:D{sign_row_header}")
     cell_sign_left = ws_main[f"A{sign_row_header}"]
@@ -465,8 +488,26 @@ def generate_timekeeping_template(
 
 
 # ---------------------------------------------------------
-# 5. TÍNH TOÁN DỮ LIỆU TỔNG HỢP
+# 5. TÍNH TOÁN DỮ LIỆU TỔNG HỢP (XỬ LÝ GHÉP 2 KÝ TỰ SÁNG - CHIỀU)
 # ---------------------------------------------------------
+def process_single_char(char_sym, res_dict):
+    c = char_sym.upper()
+    if c == "X":
+        res_dict["c_cong"] += 0.5
+    elif c == "T":
+        res_dict["c_truc"] += 0.5
+    elif c == "B":
+        res_dict["c_b"] += 0.5
+    elif c == "P":
+        res_dict["c_p"] += 0.5
+    elif c in ["Ô", "O", "CO"]:
+        res_dict["c_o"] += 0.5
+    elif c in ["H", "CT", "R"]:
+        res_dict["c_cong"] += 0.5
+    elif c == "KO":
+        res_dict["c_khl"] += 0.5
+
+
 def parse_and_summarize(df_tk):
     if df_tk.empty:
         return pd.DataFrame()
@@ -479,48 +520,65 @@ def parse_and_summarize(df_tk):
 
     summary_list = []
     for idx, row in df_tk.iterrows():
-        c_cong, c_truc, c_b, c_p, c_o, c_khl = 0.0, 0.0, 0.0, 0.0, 0.0, 0.0
+        res = {
+            "c_cong": 0.0,
+            "c_truc": 0.0,
+            "c_b": 0.0,
+            "c_p": 0.0,
+            "c_o": 0.0,
+            "c_khl": 0.0,
+        }
 
         for d in day_cols:
             val = str(row.get(d, "")).strip().upper()
+            if not val:
+                continue
+
+            # Xử lý các chuỗi ký hiệu quy ước cố định
             if val == "XX":
-                c_cong += 1.0
+                res["c_cong"] += 1.0
             elif val == "X":
-                c_cong += 0.5
+                res["c_cong"] += 0.5
             elif val == "T":
-                c_truc += 1.0
+                res["c_truc"] += 1.0
             elif val == "BB":
-                c_b += 1.0
+                res["c_b"] += 1.0
             elif val == "B":
-                c_b += 0.5
+                res["c_b"] += 0.5
             elif val == "XTX":
-                c_cong += 1.0
-                c_truc += 1.0
+                res["c_cong"] += 1.0
+                res["c_truc"] += 1.0
             elif val == "BTB":
-                c_b += 1.0
-                c_truc += 1.0
+                res["c_b"] += 1.0
+                res["c_truc"] += 1.0
             elif val == "PP":
-                c_p += 1.0
+                res["c_p"] += 1.0
             elif val == "P":
-                c_p += 0.5
+                res["c_p"] += 0.5
             elif val in ["ÔÔ", "OO", "COCO"]:
-                c_o += 1.0
+                res["c_o"] += 1.0
             elif val in ["Ô", "O", "CO"]:
-                c_o += 0.5
+                res["c_o"] += 0.5
             elif val in ["HH", "CTCT", "RR"]:
-                c_cong += 1.0
+                res["c_cong"] += 1.0
             elif val in ["H", "CT", "R"]:
-                c_cong += 0.5
+                res["c_cong"] += 0.5
             elif val == "KO":
-                c_khl += 1.0
+                res["c_khl"] += 1.0
+            elif len(val) == 2:
+                # Xử lý GHÉP 2 KÝ TỰ ĐƠN (Trái = Sáng, Phải = Chiều)
+                left_char = val[0]
+                right_char = val[1]
+                process_single_char(left_char, res)
+                process_single_char(right_char, res)
 
         rec = row.to_dict()
-        rec["Tổng ngày công"] = c_cong
-        rec["Số ca trực"] = c_truc
-        rec["Nghỉ bù trực"] = c_b
-        rec["Nghỉ phép"] = c_p
-        rec["Nghỉ ốm/con ốm"] = c_o
-        rec["Nghỉ không lương"] = c_khl
+        rec["Tổng ngày công"] = res["c_cong"]
+        rec["Số ca trực"] = res["c_truc"]
+        rec["Nghỉ bù trực"] = res["c_b"]
+        rec["Nghỉ phép"] = res["c_p"]
+        rec["Nghỉ ốm/con ốm"] = res["c_o"]
+        rec["Nghỉ không lương"] = res["c_khl"]
         summary_list.append(rec)
 
     return pd.DataFrame(summary_list)
@@ -721,7 +779,7 @@ def render_timekeeping_management():
                     st.rerun()
 
     # -----------------------------------------------------
-    # TAB 2: UPLOAD BẢNG CHẤM CÔNG (TỰ ĐỘNG CHUYỂN IN HOA CÁC CỘT CHẤM CÔNG)
+    # TAB 2: UPLOAD BẢNG CHẤM CÔNG (ĐỌC TỪ DÒNG 5 SKAPROWS=4)
     # -----------------------------------------------------
     with tab2:
         st.markdown("##### 📤 Tải lên file Excel Bảng chấm công đã khai báo")
@@ -750,11 +808,11 @@ def render_timekeeping_management():
 
         if uploaded_tk_file:
             try:
-                df_up = pd.read_excel(uploaded_tk_file, skiprows=3).fillna("")
+                # Đọc Header từ dòng 5 (skiprows=4)
+                df_up = pd.read_excel(uploaded_tk_file, skiprows=4).fillna("")
                 if "STT" in df_up.columns:
                     df_up.drop(columns=["STT"], inplace=True)
 
-                # TỰ ĐỘNG CHUYỂN TẤT CẢ CÁC Ô CHẤM CÔNG SANG IN HOA CHUẨN
                 day_cols = [
                     c
                     for c in df_up.columns
@@ -764,8 +822,8 @@ def render_timekeeping_management():
                     df_up[d] = df_up[d].astype(str).str.upper()
 
                 st.write(
-                    "📌 **Dữ liệu đọc từ file chấm công (Hệ thống đã tự động"
-                    " chuẩn hóa toàn bộ thành chữ IN HOA):**"
+                    "📌 **Dữ liệu đọc từ file chấm công (Đã tự động chuẩn hóa"
+                    " IN HOA):**"
                 )
                 st.dataframe(df_up.head(10), use_container_width=True)
 
