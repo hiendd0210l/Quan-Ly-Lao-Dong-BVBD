@@ -216,7 +216,7 @@ def save_timekeeping_db(df, month, year):
 
 
 # ---------------------------------------------------------
-# 4. TẠO FILE EXCEL MẪU 2 SHEETS VỚI MÀU NỀN & READ-ONLY
+# 4. TẠO FILE EXCEL MẪU TẢI VỀ (ĐÃ BỎ CỘT ĐƠN VỊ VÀ SỬA HEADER)
 # ---------------------------------------------------------
 def generate_timekeeping_template(
     df_emp_unit, month, year, unit_name, df_rules
@@ -232,22 +232,29 @@ def generate_timekeeping_template(
         if unit_name != "Tất cả đơn vị"
         else "TOÀN BỆNH VIỆN"
     )
-    title_text = f"BẢNG CHẤM CÔNG THÁNG {month}/{year} CỦA {unit_title}"
 
-    ws_main.merge_cells("A1:AJ1")
-    cell_title = ws_main["A1"]
+    # Hàng 1: Tên Đơn vị phía ngoài cùng bên trái
+    unit_header_text = f"BỆNH VIỆN BƯU ĐIỆN - {unit_title}"
+    ws_main["A1"] = unit_header_text
+    ws_main["A1"].font = Font(name="Arial", size=11, bold=True, color="003366")
+    ws_main["A1"].alignment = Alignment(horizontal="left", vertical="center")
+
+    # Hàng 2: Tiêu đề Bảng Chấm Công căn giữa
+    title_text = f"BẢNG CHẤM CÔNG THÁNG {month}/{year} CỦA {unit_title}"
+    ws_main.merge_cells("A2:AI2")
+    cell_title = ws_main["A2"]
     cell_title.value = title_text
     cell_title.font = Font(name="Arial", size=14, bold=True, color="003366")
     cell_title.alignment = Alignment(horizontal="center", vertical="center")
 
     num_days = calendar.monthrange(year, month)[1]
 
-    # Tiêu đề cột dạng "DD/MM" (Ví dụ: 01/10, 02/10...)
+    # Tiêu đề cột (BỎ CỘT ĐƠN VỊ)
     day_headers = [f"{d:02d}/{month:02d}" for d in range(1, num_days + 1)]
-    headers = ["STT", "Mã NV", "Họ và tên", "Chức vụ", "Đơn vị"] + day_headers
+    headers = ["STT", "Mã NV", "Họ và tên", "Chức vụ"] + day_headers
 
-    ws_main.append([])  # Dòng A2
-    ws_main.append(headers)  # Dòng D3
+    ws_main.append([])  # Dòng A3 trống
+    ws_main.append(headers)  # Dòng D4 (Header)
 
     # Các Style màu sắc
     header_font = Font(name="Arial", size=10, bold=True, color="FFFFFF")
@@ -255,7 +262,6 @@ def generate_timekeeping_template(
         start_color="1F4E79", end_color="1F4E79", fill_type="solid"
     )
 
-    # Khai báo màu nền cho Thứ 7, Chủ Nhật, Lễ/Tết
     fill_sat = PatternFill(
         start_color="D9E1F2", end_color="D9E1F2", fill_type="solid"
     )  # Xanh dương nhạt
@@ -273,10 +279,8 @@ def generate_timekeeping_template(
         bottom=Side(style="thin", color="CCCCCC"),
     )
 
-    # Danh sách các ngày lễ cố định theo Bộ luật Lao động (Ngày/Tháng)
     fixed_holidays = ["01/01", "30/04", "01/05", "02/09"]
 
-    # Xác định kiểu màu cho từng cột ngày
     day_fills = {}
     for d in range(1, num_days + 1):
         dt = date(year, month, d)
@@ -284,66 +288,63 @@ def generate_timekeeping_template(
 
         if day_str in fixed_holidays:
             day_fills[d] = fill_holiday
-        elif dt.weekday() == 5:  # Thứ 7
+        elif dt.weekday() == 5:
             day_fills[d] = fill_sat
-        elif dt.weekday() == 6:  # Chủ Nhật
+        elif dt.weekday() == 6:
             day_fills[d] = fill_sun
         else:
             day_fills[d] = None
 
-    # Tô màu dòng Header (Dòng 3)
+    # Tô màu dòng Header (Dòng 4)
     for col_idx in range(1, len(headers) + 1):
-        cell = ws_main.cell(row=3, column=col_idx)
+        cell = ws_main.cell(row=4, column=col_idx)
         cell.font = header_font
         cell.fill = header_fill_default
         cell.alignment = Alignment(horizontal="center", vertical="center")
         cell.border = thin_border
 
-    # Thêm dữ liệu nhân viên (ô chấm công để trống)
+    # Điền nhân viên (Đã loại bỏ giá trị cột Đơn vị)
     for idx, (_, row) in enumerate(df_emp_unit.iterrows(), start=1):
         row_data = [
             idx,
             row.get("Mã NV", ""),
             row.get("Họ và tên", ""),
             row.get("Chức vụ", ""),
-            row.get("Đơn vị", unit_name),
         ] + [
             "" for _ in range(num_days)
         ]
         ws_main.append(row_data)
 
-    # Format ô dữ liệu và tô màu cột Thứ 7, Chủ Nhật, Ngày Lễ
-    for r in range(4, 4 + len(df_emp_unit)):
+    # Format ô dữ liệu và tô màu cột
+    for r in range(5, 5 + len(df_emp_unit)):
         for c in range(1, len(headers) + 1):
             cell = ws_main.cell(row=r, column=c)
             cell.border = thin_border
             cell.font = Font(name="Arial", size=10)
 
-            if c <= 5:
+            if c <= 4:
                 cell.alignment = Alignment(
-                    horizontal="left" if c in [3, 4, 5] else "center",
+                    horizontal="left" if c in [3, 4] else "center",
                     vertical="center",
                 )
             else:
-                day_num = c - 5
+                day_num = c - 4
                 cell.alignment = Alignment(
                     horizontal="center", vertical="center"
                 )
-                # Tô màu nền cho các ô chấm công theo ngày
                 if day_fills.get(day_num):
                     cell.fill = day_fills[day_num]
 
-    # Cài đặt độ rộng cột
+    # Set độ rộng cột
     ws_main.column_dimensions["A"].width = 6
     ws_main.column_dimensions["B"].width = 12
     ws_main.column_dimensions["C"].width = 25
-    ws_main.column_dimensions["D"].width = 20
-    ws_main.column_dimensions["E"].width = 22
-    for col_idx in range(6, len(headers) + 1):
+    ws_main.column_dimensions["D"].width = 22
+    for col_idx in range(5, len(headers) + 1):
         col_letter = openpyxl.utils.get_column_letter(col_idx)
         ws_main.column_dimensions[col_letter].width = 9
 
-    # --- SHEET 2: QUY UOC KY HIEU (KHÓA BẢO VỆ / READ-ONLY) ---
+    # --- SHEET 2: QUY UOC KY HIEU (KHÓA READ-ONLY) ---
     ws_rules = wb.create_sheet(title="QuyUocKyHieu")
     ws_rules["A1"] = "BẢNG QUY ƯỚC KÝ HIỆU CHẤM CÔNG CHUẨN BỘ Y TẾ & BỘ NỘI VỤ"
     ws_rules["A1"].font = Font(name="Arial", size=12, bold=True, color="003366")
@@ -378,7 +379,6 @@ def generate_timekeeping_template(
     ws_rules.column_dimensions["B"].width = 15
     ws_rules.column_dimensions["C"].width = 50
 
-    # THIẾT LẬP READ-ONLY (BẢO VỆ SHEET CHỐNG SỬA)
     ws_rules.protection.sheet = True
     ws_rules.protection.password = "123456"
 
@@ -389,13 +389,12 @@ def generate_timekeeping_template(
 
 
 # ---------------------------------------------------------
-# 5. TÍNH TOÁN DỮ LIỆU TỔNG HỢP (TỰ ĐỘNG BỎ CỘT / HOẶC ĐỊNH DẠNG DD/MM)
+# 5. TÍNH TOÁN DỮ LIỆU TỔNG HỢP
 # ---------------------------------------------------------
 def parse_and_summarize(df_tk):
     if df_tk.empty:
         return pd.DataFrame()
 
-    # Nhận diện cột ngày theo kiểu "Ngày 01" hoặc "01/10"
     day_cols = [
         c
         for c in df_tk.columns
@@ -675,7 +674,7 @@ def render_timekeeping_management():
 
         if uploaded_tk_file:
             try:
-                df_up = pd.read_excel(uploaded_tk_file, skiprows=2).fillna("")
+                df_up = pd.read_excel(uploaded_tk_file, skiprows=3).fillna("")
                 if "STT" in df_up.columns:
                     df_up.drop(columns=["STT"], inplace=True)
 
@@ -871,7 +870,10 @@ def render_timekeeping_management():
         if all_dfs:
             combined_rep = pd.concat(all_dfs, ignore_index=True)
 
-            group_cols = ["Mã NV", "Họ và tên", "Chức vụ", "Đơn vị"]
+            group_cols = ["Mã NV", "Họ và tên", "Chức vụ"]
+            if "Đơn vị" in combined_rep.columns:
+                group_cols.append("Đơn vị")
+
             sum_cols = [
                 "Tổng ngày công",
                 "Số ca trực",
