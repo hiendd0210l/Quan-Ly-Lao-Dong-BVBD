@@ -209,12 +209,11 @@ def save_timekeeping_db(df, month, year):
 
 
 # ---------------------------------------------------------
-# 4. TẠO FILE EXCEL MẪU TỰ ĐỘNG (HỖ TRỢ MACRO TỰ ĐỘNG IN HOA VÀ VALIDATION)
+# 4. TẠO FILE EXCEL MẪU (SỬ DỤNG LIST VALIDATION CHUẨN ĐỂ TỰ ĐỘNG IN HOA KHI NHẬP)
 # ---------------------------------------------------------
 def generate_timekeeping_template(
     df_emp_unit, month, year, unit_name, df_rules
 ):
-    # Sử dụng openpyxl (hoặc nén dạng macro .xlsm nếu cần chạy VBA, ở đây ta dùng .xlsx tiêu chuẩn kèm Data Validation tự động in hoa qua công thức hoặc macro hướng dẫn)
     wb = openpyxl.Workbook()
 
     # --- SHEET 2: QUY UOC KY HIEU ---
@@ -247,11 +246,35 @@ def generate_timekeeping_template(
     all_symbols_dict = []
     for idx, (_, r_row) in enumerate(df_rules.iterrows(), start=1):
         sym = str(r_row.get("Ký hiệu", "")).strip().upper()
-        if sym:
+        if sym and sym != "TT":
             all_symbols_dict.append({
                 "sym": sym,
                 "desc": r_row.get("Diễn giải", ""),
             })
+
+    # Sinh danh sách tổ hợp cơ bản và mở rộng linh hoạt cho phép kết hợp trực T (trừ TT)
+    single_codes = ["X", "B", "P", "H", "CT", "Ô", "O", "R", "K", "T"]
+    existing_syms = {item["sym"] for item in all_symbols_dict}
+
+    for c1 in single_codes:
+        for c2 in single_codes:
+            pair = f"{c1}{c2}"
+            if pair != "TT" and pair not in existing_syms:
+                all_symbols_dict.append({
+                    "sym": pair,
+                    "desc": f"Tổ hợp ghép: {c1} - {c2}",
+                })
+                existing_syms.add(pair)
+
+    # Thêm các tổ hợp 3 ký tự phổ biến có chứa T (như TPP, XXT, TXX, XTX...)
+    extra_combinations = ["TPP", "XXT", "TXX", "XTX", "XBT", "TX", "XT", "TP", "PT"]
+    for ex in extra_combinations:
+        if ex not in existing_syms:
+            all_symbols_dict.append({
+                "sym": ex,
+                "desc": f"Tổ hợp kết hợp trực đặc biệt: {ex}",
+            })
+            existing_syms.add(ex)
 
     for idx, item in enumerate(all_symbols_dict, start=1):
         ws_rules.append([idx, item["sym"], item["desc"]])
@@ -375,19 +398,12 @@ def generate_timekeeping_template(
             if day_fills.get(d_num):
                 cell.fill = day_fills[d_num]
 
-    # DATA VALIDATION: KẾT HỢP HÀM UPPER TRONG CÔNG THỨC EXCEL ĐỂ TỰ ĐỘNG CHẶN KHI CÓ "TT"
-    # Công thức: =ISERROR(SEARCH("TT", UPPER(E6)))
-    first_data_row = 6
-    last_data_row = 5 + (num_emp if num_emp > 0 else 50)
-    first_day_col = openpyxl.utils.get_column_letter(5)
-    last_day_col = openpyxl.utils.get_column_letter(4 + num_days)
-    target_range_str = (
-        f"{first_day_col}{first_data_row}:{last_day_col}{last_data_row}"
-    )
+    # DATA VALIDATION TRỎ THẲNG VÀO VÙNG KÝ HIỆU (Gúp Excel tự động viết hoa khi nhập ký tự tương ứng)
+    rules_range_formula = f"QuyUocKyHieu!$B$4:$B${last_rule_row}"
 
     dv = DataValidation(
-        type="custom",
-        formula1=f'=ISERROR(SEARCH("TT", UPPER({first_day_col}{first_data_row})))',
+        type="list",
+        formula1=rules_range_formula,
         allow_blank=True,
         errorStyle="stop",
         showErrorMessage=True,
@@ -396,17 +412,23 @@ def generate_timekeeping_template(
 
     dv.errorTitle = "❌ KÝ HIỆU KHÔNG HỢP LỆ"
     dv.error = (
-        "Ký hiệu nhập vào không được chứa từ 2 chữ T trở lên (Không được nhập"
-        " 'TT')!"
+        "Ký hiệu nhập vào không nằm trong danh mục quy ước chuẩn hoặc bị thừa"
+        " ký tự T (Không được nhập 'TT')!"
     )
     dv.promptTitle = "💡 QUY TẮC CHẤM CÔNG"
     dv.prompt = (
-        "Bạn có thể gõ chữ thường (vd: xx, tpp, xtx), hệ thống và Excel sẽ tự"
-        " động nhận diện. Tuyệt đối không nhập 'TT'."
+        "Nhập ký hiệu chấm công (hệ thống tự động in hoa các ô ngày, giữ nguyên"
+        " các thông tin khác)."
     )
 
     ws_main.add_data_validation(dv)
-    dv.add(target_range_str)
+
+    first_data_row = 6
+    last_data_row = 5 + (num_emp if num_emp > 0 else 50)
+    first_day_col = openpyxl.utils.get_column_letter(5)
+    last_day_col = openpyxl.utils.get_column_letter(4 + num_days)
+
+    dv.add(f"{first_day_col}{first_data_row}:{last_day_col}{last_data_row}")
 
     # --- KHU VỰC CHỮ KÝ IN ẤN A4 NẰM NGANG ---
     sign_row_header = last_data_row + 3
@@ -468,7 +490,7 @@ def generate_timekeeping_template(
 
 
 # ---------------------------------------------------------
-# 5. TÍNH TOÁN DỮ LIỆU TỔNG HỢP (XỬ LÝ CẢ CHỮ THƯỜNG / HOA VÀ TÁCH TỰ ĐỘNG)
+# 5. TÍNH TOÁN DỮ LIỆU TỔNG HỢP (TỰ ĐỘNG TÁCH & TÍNH TRỰC LƯU CSDL)
 # ---------------------------------------------------------
 def parse_and_summarize(df_tk):
     if df_tk.empty:
@@ -811,7 +833,7 @@ def render_timekeeping_management():
 
                 st.write(
                     "📌 **Dữ liệu đọc từ file chấm công (Đã tự động chuẩn hóa"
-                    " IN HOA):**"
+                    " IN HOA các cột ngày):**"
                 )
                 st.dataframe(df_up.head(10), use_container_width=True)
 
