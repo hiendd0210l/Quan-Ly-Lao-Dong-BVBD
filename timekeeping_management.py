@@ -287,16 +287,12 @@ def generate_timekeeping_template(
 
     # 1. HÀNG 1: BỆNH VIỆN BƯU ĐIỆN (IN HOA, KHÔNG ĐẬM)
     ws_main["A1"] = "BỆNH VIỆN BƯU ĐIỆN"
-    ws_main["A1"].font = Font(
-        name="Arial", size=11, bold=False, color="000000"
-    )  # Không in đậm
+    ws_main["A1"].font = Font(name="Arial", size=11, bold=False, color="000000")
     ws_main["A1"].alignment = Alignment(horizontal="left", vertical="center")
 
-    # 2. HÀNG 2: TÊN KHOA / PHÒNG / TRUNG TÂM (ĐẶT NGAY DƯỚI HÀNG 1, IN HOA, IN ĐẬM)
+    # 2. HÀNG 2: TÊN KHOA / PHÒNG / TRUNG TÂM (IN HOA, IN ĐẬM)
     ws_main["A2"] = unit_title
-    ws_main["A2"].font = Font(
-        name="Arial", size=11, bold=True, color="003366"
-    )  # In đậm
+    ws_main["A2"].font = Font(name="Arial", size=11, bold=True, color="003366")
     ws_main["A2"].alignment = Alignment(horizontal="left", vertical="center")
 
     num_days = calendar.monthrange(year, month)[1]
@@ -384,22 +380,25 @@ def generate_timekeeping_template(
             if day_fills.get(d_num):
                 cell.fill = day_fills[d_num]
 
-    # --- TỰ ĐỘNG CHẤP NHẬN GHÉP KÝ TỰ ĐƠN VÀO DATA VALIDATION ---
-    single_syms = ["X", "B", "P", "H", "Ô", "O", "R", "K", "C", "T"]
-    all_allowed = set(valid_symbols)
+    # ---------------------------------------------------------
+    # TẠO DANH SÁCH TẤT CẢ KÝ HIỆU HỢP LỆ (CHO PHÉP GHÉP 2 KÝ TỰ SÁNG - CHIỀU)
+    # ---------------------------------------------------------
+    single_codes = ["X", "B", "P", "H", "CT", "Ô", "O", "R", "K", "T"]
+    allowed_list = list(valid_symbols)
 
-    for s1 in single_syms:
-        for s2 in single_syms:
-            all_allowed.add(s1 + s2)
+    # Sinh tự động tất cả các tổ hợp ghép 2 ký tự (Ví dụ: XB, BX, XP, PX...)
+    for c1 in single_codes:
+        for c2 in single_codes:
+            pair = f"{c1}{c2}"
+            if pair not in allowed_list:
+                allowed_list.append(pair)
 
-    formula_str = f'"{",".join(list(all_allowed))}"'
+    validation_list_str = f'"{",".join(allowed_list)}"'
 
-    rule_range_ref = f"QuyUocKyHieu!$B$4:$B${3 + num_rules}"
-    custom_formula = f"=ISNUMBER(MATCH(UPPER(E6), {rule_range_ref}, 0))"
-
+    # Sử dụng Data Validation dạng LIST để Excel chấp nhận trực tiếp mọi ký hiệu ghép
     dv = DataValidation(
-        type="custom",
-        formula1=custom_formula,
+        type="list",
+        formula1=validation_list_str,
         allow_blank=True,
         errorStyle="stop",
         showErrorMessage=True,
@@ -408,13 +407,13 @@ def generate_timekeeping_template(
 
     dv.errorTitle = "❌ KÝ HIỆU KHÔNG HỢP LỆ"
     dv.error = (
-        "Ký hiệu nhập vào KHÔNG CÓ trong Bảng quy ước!\nVui lòng nhập đúng"
-        " ký hiệu chuẩn hoặc ghép 2 ký tự công (Sáng - Chiều)."
+        "Ký hiệu nhập vào không nằm trong Bảng quy ước hoặc Tổ hợp ghép Sáng -"
+        " Chiều hợp lệ!"
     )
     dv.promptTitle = "💡 QUY TẮC CHẤM CÔNG"
     dv.prompt = (
-        "Trái: Buổi Sáng | Phải: Buổi Chiều (Ví dụ: XP = Sáng làm việc, Chiều"
-        " nghỉ phép)."
+        "Trái: Buổi Sáng | Phải: Buổi Chiều (Ví dụ: XB = Sáng làm việc, Chiều"
+        " nghỉ bù)."
     )
 
     ws_main.add_data_validation(dv)
@@ -488,7 +487,7 @@ def generate_timekeeping_template(
 
 
 # ---------------------------------------------------------
-# 5. TÍNH TOÁN DỮ LIỆU TỔNG HỢP (XỬ LÝ GHÉP 2 KÝ TỰ SÁNG - CHIỀU)
+# 5. TÍNH TOÁN DỮ LIỆU TỔNG HỢP (GHÉP 2 KÝ TỰ SÁNG - CHIỀU)
 # ---------------------------------------------------------
 def process_single_char(char_sym, res_dict):
     c = char_sym.upper()
@@ -534,7 +533,7 @@ def parse_and_summarize(df_tk):
             if not val:
                 continue
 
-            # Xử lý các chuỗi ký hiệu quy ước cố định
+            # Các ký hiệu chuẩn quy ước
             if val == "XX":
                 res["c_cong"] += 1.0
             elif val == "X":
@@ -566,7 +565,7 @@ def parse_and_summarize(df_tk):
             elif val == "KO":
                 res["c_khl"] += 1.0
             elif len(val) == 2:
-                # Xử lý GHÉP 2 KÝ TỰ ĐƠN (Trái = Sáng, Phải = Chiều)
+                # Phân tách 2 ký tự ghép: Trái (Sáng) - Phải (Chiều)
                 left_char = val[0]
                 right_char = val[1]
                 process_single_char(left_char, res)
@@ -667,7 +666,7 @@ def render_timekeeping_management():
 
         st.markdown("---")
 
-        # --- BẢNG QUY ƯỚC CHẤM CÔNG ---
+        # BẢNG QUY ƯỚC KÝ HIỆU CHẤM CÔNG
         with st.expander(
             "⚙️ BẢNG QUY ƯỚC KÝ HIỆU CHẤM CÔNG CHUẨN BỘ Y TẾ & BỘ NỘI VỤ",
             expanded=True,
@@ -779,7 +778,7 @@ def render_timekeeping_management():
                     st.rerun()
 
     # -----------------------------------------------------
-    # TAB 2: UPLOAD BẢNG CHẤM CÔNG (ĐỌC TỪ DÒNG 5 SKAPROWS=4)
+    # TAB 2: UPLOAD BẢNG CHẤM CÔNG
     # -----------------------------------------------------
     with tab2:
         st.markdown("##### 📤 Tải lên file Excel Bảng chấm công đã khai báo")
@@ -808,7 +807,6 @@ def render_timekeeping_management():
 
         if uploaded_tk_file:
             try:
-                # Đọc Header từ dòng 5 (skiprows=4)
                 df_up = pd.read_excel(uploaded_tk_file, skiprows=4).fillna("")
                 if "STT" in df_up.columns:
                     df_up.drop(columns=["STT"], inplace=True)
