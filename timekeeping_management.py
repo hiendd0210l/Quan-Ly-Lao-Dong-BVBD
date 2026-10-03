@@ -2,8 +2,8 @@ import calendar
 from datetime import date, datetime
 import io
 import openpyxl
-from openpyxl.worksheet.datavalidation import DataValidation
 from openpyxl.styles import Alignment, Border, Font, PatternFill, Side
+from openpyxl.worksheet.datavalidation import DataValidation
 import pandas as pd
 import streamlit as st
 from supabase import create_client
@@ -217,14 +217,14 @@ def save_timekeeping_db(df, month, year):
 
 
 # ---------------------------------------------------------
-# 4. TẠO FILE EXCEL MẪU CHUẨN (CÓ DATA VALIDATION VÀ KHU VỰC KÝ TÊN)
+# 4. TẠO FILE EXCEL MẪU CÓ CHẶN LỖI CHÍNH XÁC (DATA VALIDATION STRICT)
 # ---------------------------------------------------------
 def generate_timekeeping_template(
     df_emp_unit, month, year, unit_name, df_rules
 ):
     wb = openpyxl.Workbook()
 
-    # --- SHEET 2: QUY UOC KY HIEU (TẠO TRƯỚC ĐỂ THAM CHIẾU VALIDATION) ---
+    # --- SHEET 2: QUY UOC KY HIEU ---
     ws_rules = wb.active
     ws_rules.title = "QuyUocKyHieu"
     ws_rules["A1"] = "BẢNG QUY ƯỚC KÝ HIỆU CHẤM CÔNG CHUẨN BỘ Y TẾ & BỘ NỘI VỤ"
@@ -251,8 +251,12 @@ def generate_timekeeping_template(
         cell.alignment = Alignment(horizontal="center", vertical="center")
         cell.border = thin_border
 
+    valid_symbols = []
     for idx, (_, r_row) in enumerate(df_rules.iterrows(), start=1):
-        ws_rules.append([idx, r_row.get("Ký hiệu", ""), r_row.get("Diễn giải", "")])
+        sym = str(r_row.get("Ký hiệu", "")).strip()
+        if sym:
+            valid_symbols.append(sym)
+        ws_rules.append([idx, sym, r_row.get("Diễn giải", "")])
 
     num_rules = len(df_rules)
     for r in range(4, 4 + num_rules):
@@ -372,42 +376,46 @@ def generate_timekeeping_template(
             if day_fills.get(d_num):
                 cell.fill = day_fills[d_num]
 
-    # --- TÍNH NĂNG 1: CẢNH BÁO TỨC THỜI CHỐNG NHẬP KÝ TỰ LẠ (DATA VALIDATION) ---
-    # Ràng buộc dữ liệu dựa trên cột B từ B4 đến B{3+num_rules} ở Sheet QuyUocKyHieu
-    rule_formula = f"QuyUocKyHieu!$B$4:$B${3 + num_rules}"
+    # --- KHẮC PHỤC TRIỆT ĐỂ: CẢNH BÁO TỨC THỜI CHẶN NGHIÊM NGẶT ---
+    # Truyền trực tiếp danh sách ký hiệu hợp lệ dạng chuỗi cách nhau bởi dấu phẩy
+    if valid_symbols:
+        formula_str = f'"{",".join(valid_symbols)}"'
+    else:
+        formula_str = '"X,XX,T,B,BB,XTX,BTB,P,PP,H,HH,CT,CTCT,Ô,ÔÔ,Co,CoCo,R,RR,Ko,TS"'
+
     dv = DataValidation(
-        type="list", formula1=rule_formula, allow_blank=True, showDropDown=True
+        type="list",
+        formula1=formula_str,
+        allow_blank=True,
+        showDropDown=True,
+        errorStyle="stop",  # BẮT BUỘC BẬT KHÓA CHẶN KHÔNG CHO LƯU
+        showErrorMessage=True,
+        showInputMessage=True,
     )
 
     dv.errorTitle = "❌ KÝ HIỆU KHÔNG HỢP LỆ"
     dv.error = (
-        "Ký hiệu chấm công nhập vào không có trong Bảng quy ước chuẩn!\nVui"
-        " lòng nhập đúng ký hiệu được quy định."
+        "Ký hiệu nhập vào KHÔNG CÓ trong bảng quy ước!\nVui lòng chọn hoặc"
+        " nhập lại đúng ký hiệu chuẩn."
     )
     dv.promptTitle = "💡 LƯU Ý CHẤM CÔNG"
-    dv.prompt = "Chỉ nhập các ký hiệu chấm công chuẩn theo Bảng Quy ước."
+    dv.prompt = "Chỉ nhập các ký hiệu chấm công có trong danh sách quy ước."
 
     ws_main.add_data_validation(dv)
 
-    # Áp dụng Data Validation cho toàn bộ ô ngày chấm công
+    # Áp dụng cho toàn bộ các dòng nhân viên x các cột ngày
     first_data_row = 5
-    last_data_row = 4 + num_emp
+    last_data_row = 4 + (num_emp if num_emp > 0 else 50)  # Mở rộng dải ô chặn
     first_day_col = openpyxl.utils.get_column_letter(5)
     last_day_col = openpyxl.utils.get_column_letter(4 + num_days)
 
-    if num_emp > 0:
-        dv.add(
-            f"{first_day_col}{first_data_row}:{last_day_col}{last_data_row}"
-        )
+    dv.add(f"{first_day_col}{first_data_row}:{last_day_col}{last_data_row}")
 
-    # --- TÍNH NĂNG 2: KHU VỰC CHỮ KÝ IN ẤN A4 NẰM NGANG ---
-    # Cách 2 hàng sau danh sách nhân viên
-    sign_row_header = last_data_row + 3
+    # --- KHU VỰC CHỮ KÝ IN ẤN A4 NẰM NGANG ---
+    sign_row_header = (4 + num_emp) + 3
 
     # Cột Trái: NGƯỜI CHẤM CÔNG
-    ws_main.merge_cells(
-        f"A{sign_row_header}:D{sign_row_header}"
-    )  # Merge 4 cột đầu
+    ws_main.merge_cells(f"A{sign_row_header}:D{sign_row_header}")
     cell_sign_left = ws_main[f"A{sign_row_header}"]
     cell_sign_left.value = "NGƯỜI CHẤM CÔNG"
     cell_sign_left.font = Font(name="Arial", size=11, bold=True)
@@ -616,7 +624,7 @@ def render_timekeeping_management():
 
         # --- BẢNG QUY ƯỚC CHẤM CÔNG ---
         with st.expander(
-            "⚙️ BẢNG QUY ƯỚC KÝ HIỆU CHẤM CÔNG CHUẨN BỘ Y TẾ & BỘ NỘI VỤ",
+            "⚙️️ BẢNG QUY ƯỚC KÝ HIỆU CHẤM CÔNG CHUẨN BỘ Y TẾ & BỘ NỘI VỤ",
             expanded=True,
         ):
             c_add_rule, c_del_rule = st.columns([2, 1])
