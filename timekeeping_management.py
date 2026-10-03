@@ -59,15 +59,47 @@ DEFAULT_TIMEKEEPING_RULES = [
     {"Ký hiệu": "TS", "Diễn giải": "1 ngày nghỉ thai sản"},
 ]
 
+# Cập nhật chính xác danh sách Tên Đơn vị từ tệp Mau_đơn_vị.xlsx
 DEFAULT_DON_VI = [
-    "Khoa Cấp cứu",
-    "Khoa Khám bệnh",
-    "Khoa Ngoại tổng hợp",
+    "Ban Giám đốc",
+    "Phòng Nhân sự - Tổng hợp",
+    "Phòng Tài chính - Kế toán",
+    "Phòng Kế hoạch - Tổng hợp",
+    "Phòng Công nghệ thông tin",
+    "Phòng Kinh doanh và Đầu tư",
+    "Phòng Vật tư - Thiết bị y tế",
+    "Phòng Hành chính - Quản trị",
+    "Phòng Quản lý chất lượng_Công tác xã hội",
+    "Phòng Điều dưỡng",
     "Khoa Dược",
-    "Khoa Hồi sức tích cực",
-    "Phòng Tổ chức Cán bộ",
-    "Phòng Tài chính Kế toán",
-    "Phòng Kế hoạch Tổng hợp",
+    "Khoa Mắt",
+    "Khoa Tai Mũi Họng",
+    "Khoa Răng Hàm Mặt",
+    "Khoa Khám bệnh 1",
+    "Khoa Khám bệnh 2",
+    "Khoa Hồi sức cấp cứu",
+    "Khoa Gây mê hồi sức",
+    "Khoa Gây mê - Hồi sức cấp cứu",
+    "Khoa Ngoại Tổng hợp",
+    "Khoa Phẫu thuật tạo hình và thẩm mỹ",
+    "Khoa Sản",
+    "Khoa Y học cổ truyền - Phục hồi chức năng",
+    "Khoa Thận - Lọc máu",
+    "Khoa Nội 1",
+    "Khoa Nội 2",
+    "Khoa Ngoại tiết niệu",
+    "Khoa Ngoại 2",
+    "Khoa Chẩn đoán hình ảnh",
+    "Khoa Nội soi - Thăm dò chức năng",
+    "Khoa Chẩn đoán hình ảnh - Nội soi và Thăm dò chức năng",
+    "Khoa Xét nghiệm 1",
+    "Khoa Xét nghiệm 2",
+    "Khoa Kiểm soát nhiễm khuẩn",
+    "Khoa Dinh dưỡng",
+    "Trung tâm Hỗ trợ sinh sản",
+    "Trung tâm Tế bào gốc và Di truyền",
+    "Trung tâm Y tế lao động Bưu điện",
+    "Điều dưỡng và Chăm sóc sức khoẻ Bưu điện",
 ]
 
 DEFAULT_CAN_BO = [
@@ -87,7 +119,7 @@ DEFAULT_CAN_BO = [
         "Mã NV": "NV003",
         "Họ và tên": "Lê Hoàng Cường",
         "Chức vụ": "Bác sĩ chính",
-        "Đơn vị": "Khoa Ngoại tổng hợp",
+        "Đơn vị": "Khoa Ngoại Tổng hợp",
     },
     {
         "Mã NV": "NV004",
@@ -99,7 +131,7 @@ DEFAULT_CAN_BO = [
         "Mã NV": "NV005",
         "Họ và tên": "Vũ Thị Dung",
         "Chức vụ": "Chuyên viên TCCB",
-        "Đơn vị": "Phòng Tổ chức Cán bộ",
+        "Đơn vị": "Phòng Nhân sự - Tổng hợp",
     },
 ]
 
@@ -209,7 +241,7 @@ def save_timekeeping_db(df, month, year):
 
 
 # ---------------------------------------------------------
-# 4. TẠO FILE EXCEL MẪU (SỬ DỤNG LIST VALIDATION ĐỂ TỰ ĐỘNG IN HOA & CHẶN TT)
+# 4. TẠO FILE EXCEL MẪU (GIỮ NGUYÊN HOÀN TOÀN CƠ CHẾ VALIDATION & TỰ ĐỘNG IN HOA)
 # ---------------------------------------------------------
 def generate_timekeeping_template(
     df_emp_unit, month, year, unit_name, df_rules
@@ -252,11 +284,9 @@ def generate_timekeeping_template(
                 "desc": r_row.get("Diễn giải", ""),
             })
 
-    # Tự động sinh danh sách các tổ hợp 2 và 3 ký tự hợp lệ (Loại bỏ tuyệt đối mọi trường hợp chứa từ 2 chữ T trở lên)
     base_chars = ["X", "B", "P", "H", "CT", "Ô", "O", "R", "K", "T"]
     existing_syms = {item["sym"] for item in all_symbols_dict}
 
-    # Sinh tổ hợp 2 ký tự
     for c1 in base_chars:
         for c2 in base_chars:
             pair = f"{c1}{c2}"
@@ -267,7 +297,6 @@ def generate_timekeeping_template(
                 })
                 existing_syms.add(pair)
 
-    # Sinh tổ hợp 3 ký tự phổ biến (ví dụ: TPP, XXT, TXX, XTX, PTP, XBT...) với điều kiện số lượng chữ T < 2
     for c1 in ["X", "B", "P", "H", "T"]:
         for c2 in ["X", "B", "P", "H", "T"]:
             for c3 in ["X", "B", "P", "H", "T"]:
@@ -401,7 +430,6 @@ def generate_timekeeping_template(
             if day_fills.get(d_num):
                 cell.fill = day_fills[d_num]
 
-    # DATA VALIDATION DẠNG LIST TRỎ TRỰC TIẾP VÀO BẢNG QUY ƯỚC (TỰ ĐỘNG IN HOA NGAY LẬP TỨC VÀ CHẶN TUYỆT ĐỐI TT)
     rules_range_formula = f"QuyUocKyHieu!$B$4:$B${last_rule_row}"
 
     dv = DataValidation(
@@ -495,7 +523,7 @@ def generate_timekeeping_template(
 
 
 # ---------------------------------------------------------
-# 5. TÍNH TOÁN DỮ LIỆU TỔNG HỢP (XỬ LÝ ĐỒNG BỘ)
+# 5. TÍNH TOÁN DỮ LIỆU TỔNG HỢP (GIỮ NGUYÊN LOGIC XỬ LÝ)
 # ---------------------------------------------------------
 def parse_and_summarize(df_tk):
     if df_tk.empty:
@@ -592,11 +620,7 @@ def render_timekeeping_management():
     ])
 
     df_emp_all = load_employees()
-    unit_list = (
-        list(df_emp_all["Đơn vị"].unique())
-        if not df_emp_all.empty
-        else DEFAULT_DON_VI
-    )
+    unit_list = DEFAULT_DON_VI
 
     # -----------------------------------------------------
     # TAB 1: TẢI FILE MẪU EXCEL
