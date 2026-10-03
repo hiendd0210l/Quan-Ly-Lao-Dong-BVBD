@@ -216,7 +216,7 @@ def save_timekeeping_db(df, month, year):
 
 
 # ---------------------------------------------------------
-# 4. TẠO FILE EXCEL MẪU TẢI VỀ (ĐÃ BỎ CỘT ĐƠN VỊ VÀ SỬA HEADER)
+# 4. TẠO FILE EXCEL MẪU CHUẨN (LOẠI BỎ CỘT ĐƠN VỊ & GHI CHUẨN HÀNG 1)
 # ---------------------------------------------------------
 def generate_timekeeping_template(
     df_emp_unit, month, year, unit_name, df_rules
@@ -233,30 +233,29 @@ def generate_timekeeping_template(
         else "TOÀN BỆNH VIỆN"
     )
 
-    # Hàng 1: Tên Đơn vị phía ngoài cùng bên trái
-    unit_header_text = f"BỆNH VIỆN BƯU ĐIỆN - {unit_title}"
-    ws_main["A1"] = unit_header_text
+    # HÀNG 1: Dòng tên Bệnh viện và Đơn vị ngoài cùng bên trái (Ô A1)
+    ws_main["A1"] = f"BỆNH VIỆN BƯU ĐIỆN - {unit_title}"
     ws_main["A1"].font = Font(name="Arial", size=11, bold=True, color="003366")
     ws_main["A1"].alignment = Alignment(horizontal="left", vertical="center")
 
-    # Hàng 2: Tiêu đề Bảng Chấm Công căn giữa
+    num_days = calendar.monthrange(year, month)[1]
+
+    # HÀNG 2: Tiêu đề Bảng Chấm Công căn giữa toàn bộ độ rộng cột
     title_text = f"BẢNG CHẤM CÔNG THÁNG {month}/{year} CỦA {unit_title}"
-    ws_main.merge_cells("A2:AI2")
+
+    # Tiêu đề cột Dòng 4: LOẠI BỎ CỘT ĐƠN VỊ[cite: 17]
+    day_headers = [f"{d:02d}/{month:02d}" for d in range(1, num_days + 1)]
+    headers = ["STT", "Mã NV", "Họ và tên", "Chức vụ"] + day_headers
+
+    # Merge A2 đến cột cuối cùng
+    last_col_letter = openpyxl.utils.get_column_letter(len(headers))
+    ws_main.merge_cells(f"A2:{last_col_letter}2")
     cell_title = ws_main["A2"]
     cell_title.value = title_text
     cell_title.font = Font(name="Arial", size=14, bold=True, color="003366")
     cell_title.alignment = Alignment(horizontal="center", vertical="center")
 
-    num_days = calendar.monthrange(year, month)[1]
-
-    # Tiêu đề cột (BỎ CỘT ĐƠN VỊ)
-    day_headers = [f"{d:02d}/{month:02d}" for d in range(1, num_days + 1)]
-    headers = ["STT", "Mã NV", "Họ và tên", "Chức vụ"] + day_headers
-
-    ws_main.append([])  # Dòng A3 trống
-    ws_main.append(headers)  # Dòng D4 (Header)
-
-    # Các Style màu sắc
+    # HÀNG 4: Header
     header_font = Font(name="Arial", size=10, bold=True, color="FFFFFF")
     header_fill_default = PatternFill(
         start_color="1F4E79", end_color="1F4E79", fill_type="solid"
@@ -295,47 +294,48 @@ def generate_timekeeping_template(
         else:
             day_fills[d] = None
 
-    # Tô màu dòng Header (Dòng 4)
-    for col_idx in range(1, len(headers) + 1):
-        cell = ws_main.cell(row=4, column=col_idx)
+    # Ghi tiêu đề vào Hàng 4
+    for c_idx, h_text in enumerate(headers, start=1):
+        cell = ws_main.cell(row=4, column=c_idx)
+        cell.value = h_text
         cell.font = header_font
         cell.fill = header_fill_default
         cell.alignment = Alignment(horizontal="center", vertical="center")
         cell.border = thin_border
 
-    # Điền nhân viên (Đã loại bỏ giá trị cột Đơn vị)
+    # Ghi danh sách nhân viên từ Hàng 5 (HOÀN TOÀN KHÔNG CÓ CỘT ĐƠN VỊ[cite: 17])
     for idx, (_, row) in enumerate(df_emp_unit.iterrows(), start=1):
-        row_data = [
-            idx,
-            row.get("Mã NV", ""),
-            row.get("Họ và tên", ""),
-            row.get("Chức vụ", ""),
-        ] + [
-            "" for _ in range(num_days)
-        ]
-        ws_main.append(row_data)
+        current_row = 4 + idx
 
-    # Format ô dữ liệu và tô màu cột
-    for r in range(5, 5 + len(df_emp_unit)):
-        for c in range(1, len(headers) + 1):
-            cell = ws_main.cell(row=r, column=c)
+        ws_main.cell(row=current_row, column=1, value=idx)
+        ws_main.cell(row=current_row, column=2, value=row.get("Mã NV", ""))
+        ws_main.cell(row=current_row, column=3, value=row.get("Họ và tên", ""))
+        ws_main.cell(
+            row=current_row, column=4, value=row.get("Chức vụ", "")
+        )
+
+        # Định dạng style cho 4 cột thông tin
+        for c in range(1, 5):
+            cell = ws_main.cell(row=current_row, column=c)
             cell.border = thin_border
             cell.font = Font(name="Arial", size=10)
+            cell.alignment = Alignment(
+                horizontal="left" if c in [3, 4] else "center",
+                vertical="center",
+            )
 
-            if c <= 4:
-                cell.alignment = Alignment(
-                    horizontal="left" if c in [3, 4] else "center",
-                    vertical="center",
-                )
-            else:
-                day_num = c - 4
-                cell.alignment = Alignment(
-                    horizontal="center", vertical="center"
-                )
-                if day_fills.get(day_num):
-                    cell.fill = day_fills[day_num]
+        # Định dạng cho các cột ngày chấm công
+        for d_num in range(1, num_days + 1):
+            col_pos = 4 + d_num
+            cell = ws_main.cell(row=current_row, column=col_pos, value="")
+            cell.border = thin_border
+            cell.font = Font(name="Arial", size=10)
+            cell.alignment = Alignment(horizontal="center", vertical="center")
 
-    # Set độ rộng cột
+            if day_fills.get(d_num):
+                cell.fill = day_fills[d_num]
+
+    # Cài đặt độ rộng cột
     ws_main.column_dimensions["A"].width = 6
     ws_main.column_dimensions["B"].width = 12
     ws_main.column_dimensions["C"].width = 25
@@ -645,7 +645,7 @@ def render_timekeeping_management():
                     st.rerun()
 
     # -----------------------------------------------------
-    # TAB 2: UPLOAD BẢNG CHẤM CÔNG
+    # TAB 2: UPLOAD BẢNG CHẤM CÔNG (BỎ QUA 3 DÒNG HEADER ĐẦU)
     # -----------------------------------------------------
     with tab2:
         st.markdown("##### 📤 Tải lên file Excel Bảng chấm công đã khai báo")
@@ -674,6 +674,7 @@ def render_timekeeping_management():
 
         if uploaded_tk_file:
             try:
+                # Đọc từ dòng 4 (skiprows=3) để lấy đúng tên cột Header
                 df_up = pd.read_excel(uploaded_tk_file, skiprows=3).fillna("")
                 if "STT" in df_up.columns:
                     df_up.drop(columns=["STT"], inplace=True)
