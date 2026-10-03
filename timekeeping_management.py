@@ -2,6 +2,7 @@ import calendar
 from datetime import date, datetime
 import io
 import openpyxl
+from openpyxl.worksheet.datavalidation import DataValidation
 from openpyxl.styles import Alignment, Border, Font, PatternFill, Side
 import pandas as pd
 import streamlit as st
@@ -216,16 +217,64 @@ def save_timekeeping_db(df, month, year):
 
 
 # ---------------------------------------------------------
-# 4. TẠO FILE EXCEL MẪU CHUẨN (LOẠI BỎ CỘT ĐƠN VỊ & GHI CHUẨN HÀNG 1)
+# 4. TẠO FILE EXCEL MẪU CHUẨN (CÓ DATA VALIDATION VÀ KHU VỰC KÝ TÊN)
 # ---------------------------------------------------------
 def generate_timekeeping_template(
     df_emp_unit, month, year, unit_name, df_rules
 ):
     wb = openpyxl.Workbook()
 
+    # --- SHEET 2: QUY UOC KY HIEU (TẠO TRƯỚC ĐỂ THAM CHIẾU VALIDATION) ---
+    ws_rules = wb.active
+    ws_rules.title = "QuyUocKyHieu"
+    ws_rules["A1"] = "BẢNG QUY ƯỚC KÝ HIỆU CHẤM CÔNG CHUẨN BỘ Y TẾ & BỘ NỘI VỤ"
+    ws_rules["A1"].font = Font(name="Arial", size=12, bold=True, color="003366")
+
+    header_font = Font(name="Arial", size=10, bold=True, color="FFFFFF")
+    rule_headers = ["STT", "Ký hiệu", "Tên ký hiệu / Diễn giải"]
+    ws_rules.append([])
+    ws_rules.append(rule_headers)
+
+    thin_border = Border(
+        left=Side(style="thin", color="CCCCCC"),
+        right=Side(style="thin", color="CCCCCC"),
+        top=Side(style="thin", color="CCCCCC"),
+        bottom=Side(style="thin", color="CCCCCC"),
+    )
+
+    for col_idx in range(1, len(rule_headers) + 1):
+        cell = ws_rules.cell(row=3, column=col_idx)
+        cell.font = header_font
+        cell.fill = PatternFill(
+            start_color="2F5597", end_color="2F5597", fill_type="solid"
+        )
+        cell.alignment = Alignment(horizontal="center", vertical="center")
+        cell.border = thin_border
+
+    for idx, (_, r_row) in enumerate(df_rules.iterrows(), start=1):
+        ws_rules.append([idx, r_row.get("Ký hiệu", ""), r_row.get("Diễn giải", "")])
+
+    num_rules = len(df_rules)
+    for r in range(4, 4 + num_rules):
+        for c in range(1, 4):
+            cell = ws_rules.cell(row=r, column=c)
+            cell.border = thin_border
+            cell.font = Font(name="Arial", size=10)
+            cell.alignment = Alignment(
+                horizontal="center" if c in [1, 2] else "left",
+                vertical="center",
+            )
+
+    ws_rules.column_dimensions["A"].width = 8
+    ws_rules.column_dimensions["B"].width = 15
+    ws_rules.column_dimensions["C"].width = 50
+
+    # Khóa Sheet Quy ước (Read-only)
+    ws_rules.protection.sheet = True
+    ws_rules.protection.password = "123456"
+
     # --- SHEET 1: BẢNG CHẤM CÔNG ---
-    ws_main = wb.active
-    ws_main.title = f"ChamCong_T{month}_{year}"
+    ws_main = wb.create_sheet(title=f"ChamCong_T{month}_{year}", index=0)
 
     unit_title = (
         unit_name.upper()
@@ -233,21 +282,19 @@ def generate_timekeeping_template(
         else "TOÀN BỆNH VIỆN"
     )
 
-    # HÀNG 1: Dòng tên Bệnh viện và Đơn vị ngoài cùng bên trái (Ô A1)
+    # Hàng 1: Dòng đơn vị góc trái
     ws_main["A1"] = f"BỆNH VIỆN BƯU ĐIỆN - {unit_title}"
     ws_main["A1"].font = Font(name="Arial", size=11, bold=True, color="003366")
     ws_main["A1"].alignment = Alignment(horizontal="left", vertical="center")
 
     num_days = calendar.monthrange(year, month)[1]
 
-    # HÀNG 2: Tiêu đề Bảng Chấm Công căn giữa toàn bộ độ rộng cột
-    title_text = f"BẢNG CHẤM CÔNG THÁNG {month}/{year} CỦA {unit_title}"
-
-    # Tiêu đề cột Dòng 4: LOẠI BỎ CỘT ĐƠN VỊ[cite: 17]
+    # Tiêu đề cột Dòng 4
     day_headers = [f"{d:02d}/{month:02d}" for d in range(1, num_days + 1)]
     headers = ["STT", "Mã NV", "Họ và tên", "Chức vụ"] + day_headers
 
-    # Merge A2 đến cột cuối cùng
+    # Hàng 2: Tiêu đề Bảng Chấm công căn giữa
+    title_text = f"BẢNG CHẤM CÔNG THÁNG {month}/{year} CỦA {unit_title}"
     last_col_letter = openpyxl.utils.get_column_letter(len(headers))
     ws_main.merge_cells(f"A2:{last_col_letter}2")
     cell_title = ws_main["A2"]
@@ -255,27 +302,19 @@ def generate_timekeeping_template(
     cell_title.font = Font(name="Arial", size=14, bold=True, color="003366")
     cell_title.alignment = Alignment(horizontal="center", vertical="center")
 
-    # HÀNG 4: Header
-    header_font = Font(name="Arial", size=10, bold=True, color="FFFFFF")
+    # Format Header Hàng 4
     header_fill_default = PatternFill(
         start_color="1F4E79", end_color="1F4E79", fill_type="solid"
     )
 
     fill_sat = PatternFill(
         start_color="D9E1F2", end_color="D9E1F2", fill_type="solid"
-    )  # Xanh dương nhạt
+    )
     fill_sun = PatternFill(
         start_color="FFF2CC", end_color="FFF2CC", fill_type="solid"
-    )  # Vàng nhạt
+    )
     fill_holiday = PatternFill(
         start_color="FCE4D6", end_color="FCE4D6", fill_type="solid"
-    )  # Đỏ nhạt
-
-    thin_border = Border(
-        left=Side(style="thin", color="CCCCCC"),
-        right=Side(style="thin", color="CCCCCC"),
-        top=Side(style="thin", color="CCCCCC"),
-        bottom=Side(style="thin", color="CCCCCC"),
     )
 
     fixed_holidays = ["01/01", "30/04", "01/05", "02/09"]
@@ -294,7 +333,6 @@ def generate_timekeeping_template(
         else:
             day_fills[d] = None
 
-    # Ghi tiêu đề vào Hàng 4
     for c_idx, h_text in enumerate(headers, start=1):
         cell = ws_main.cell(row=4, column=c_idx)
         cell.value = h_text
@@ -303,7 +341,8 @@ def generate_timekeeping_template(
         cell.alignment = Alignment(horizontal="center", vertical="center")
         cell.border = thin_border
 
-    # Ghi danh sách nhân viên từ Hàng 5 (HOÀN TOÀN KHÔNG CÓ CỘT ĐƠN VỊ[cite: 17])
+    # Ghi danh sách nhân viên từ Hàng 5
+    num_emp = len(df_emp_unit)
     for idx, (_, row) in enumerate(df_emp_unit.iterrows(), start=1):
         current_row = 4 + idx
 
@@ -314,7 +353,6 @@ def generate_timekeeping_template(
             row=current_row, column=4, value=row.get("Chức vụ", "")
         )
 
-        # Định dạng style cho 4 cột thông tin
         for c in range(1, 5):
             cell = ws_main.cell(row=current_row, column=c)
             cell.border = thin_border
@@ -324,7 +362,6 @@ def generate_timekeeping_template(
                 vertical="center",
             )
 
-        # Định dạng cho các cột ngày chấm công
         for d_num in range(1, num_days + 1):
             col_pos = 4 + d_num
             cell = ws_main.cell(row=current_row, column=col_pos, value="")
@@ -335,6 +372,81 @@ def generate_timekeeping_template(
             if day_fills.get(d_num):
                 cell.fill = day_fills[d_num]
 
+    # --- TÍNH NĂNG 1: CẢNH BÁO TỨC THỜI CHỐNG NHẬP KÝ TỰ LẠ (DATA VALIDATION) ---
+    # Ràng buộc dữ liệu dựa trên cột B từ B4 đến B{3+num_rules} ở Sheet QuyUocKyHieu
+    rule_formula = f"QuyUocKyHieu!$B$4:$B${3 + num_rules}"
+    dv = DataValidation(
+        type="list", formula1=rule_formula, allow_blank=True, showDropDown=True
+    )
+
+    dv.errorTitle = "❌ KÝ HIỆU KHÔNG HỢP LỆ"
+    dv.error = (
+        "Ký hiệu chấm công nhập vào không có trong Bảng quy ước chuẩn!\nVui"
+        " lòng nhập đúng ký hiệu được quy định."
+    )
+    dv.promptTitle = "💡 LƯU Ý CHẤM CÔNG"
+    dv.prompt = "Chỉ nhập các ký hiệu chấm công chuẩn theo Bảng Quy ước."
+
+    ws_main.add_data_validation(dv)
+
+    # Áp dụng Data Validation cho toàn bộ ô ngày chấm công
+    first_data_row = 5
+    last_data_row = 4 + num_emp
+    first_day_col = openpyxl.utils.get_column_letter(5)
+    last_day_col = openpyxl.utils.get_column_letter(4 + num_days)
+
+    if num_emp > 0:
+        dv.add(
+            f"{first_day_col}{first_data_row}:{last_day_col}{last_data_row}"
+        )
+
+    # --- TÍNH NĂNG 2: KHU VỰC CHỮ KÝ IN ẤN A4 NẰM NGANG ---
+    # Cách 2 hàng sau danh sách nhân viên
+    sign_row_header = last_data_row + 3
+
+    # Cột Trái: NGƯỜI CHẤM CÔNG
+    ws_main.merge_cells(
+        f"A{sign_row_header}:D{sign_row_header}"
+    )  # Merge 4 cột đầu
+    cell_sign_left = ws_main[f"A{sign_row_header}"]
+    cell_sign_left.value = "NGƯỜI CHẤM CÔNG"
+    cell_sign_left.font = Font(name="Arial", size=11, bold=True)
+    cell_sign_left.alignment = Alignment(
+        horizontal="center", vertical="center"
+    )
+
+    # Cột Phải: LÃNH ĐẠO KHOA/PHÒNG/TRUNG TÂM
+    sign_right_start_col = openpyxl.utils.get_column_letter(len(headers) - 6)
+    sign_right_end_col = openpyxl.utils.get_column_letter(len(headers))
+
+    ws_main.merge_cells(
+        f"{sign_right_start_col}{sign_row_header}:{sign_right_end_col}{sign_row_header}"
+    )
+    cell_sign_right = ws_main[f"{sign_right_start_col}{sign_row_header}"]
+    cell_sign_right.value = f"LÃNH ĐẠO {unit_title}"
+    cell_sign_right.font = Font(name="Arial", size=11, bold=True)
+    cell_sign_right.alignment = Alignment(
+        horizontal="center", vertical="center"
+    )
+
+    # Hàng chữ ký nhỏ bên dưới
+    sign_sub_row = sign_row_header + 1
+    ws_main.merge_cells(f"A{sign_sub_row}:D{sign_sub_row}")
+    cell_sub_left = ws_main[f"A{sign_sub_row}"]
+    cell_sub_left.value = "(Ký và ghi rõ họ tên)"
+    cell_sub_left.font = Font(name="Arial", size=9, italic=True)
+    cell_sub_left.alignment = Alignment(horizontal="center", vertical="center")
+
+    ws_main.merge_cells(
+        f"{sign_right_start_col}{sign_sub_row}:{sign_right_end_col}{sign_sub_row}"
+    )
+    cell_sub_right = ws_main[f"{sign_right_start_col}{sign_sub_row}"]
+    cell_sub_right.value = "(Ký tên, đóng dấu)"
+    cell_sub_right.font = Font(name="Arial", size=9, italic=True)
+    cell_sub_right.alignment = Alignment(
+        horizontal="center", vertical="center"
+    )
+
     # Cài đặt độ rộng cột
     ws_main.column_dimensions["A"].width = 6
     ws_main.column_dimensions["B"].width = 12
@@ -344,43 +456,12 @@ def generate_timekeeping_template(
         col_letter = openpyxl.utils.get_column_letter(col_idx)
         ws_main.column_dimensions[col_letter].width = 9
 
-    # --- SHEET 2: QUY UOC KY HIEU (KHÓA READ-ONLY) ---
-    ws_rules = wb.create_sheet(title="QuyUocKyHieu")
-    ws_rules["A1"] = "BẢNG QUY ƯỚC KÝ HIỆU CHẤM CÔNG CHUẨN BỘ Y TẾ & BỘ NỘI VỤ"
-    ws_rules["A1"].font = Font(name="Arial", size=12, bold=True, color="003366")
-
-    rule_headers = ["STT", "Ký hiệu", "Tên ký hiệu / Diễn giải"]
-    ws_rules.append([])
-    ws_rules.append(rule_headers)
-
-    for col_idx in range(1, len(rule_headers) + 1):
-        cell = ws_rules.cell(row=3, column=col_idx)
-        cell.font = header_font
-        cell.fill = PatternFill(
-            start_color="2F5597", end_color="2F5597", fill_type="solid"
-        )
-        cell.alignment = Alignment(horizontal="center", vertical="center")
-        cell.border = thin_border
-
-    for idx, (_, r_row) in enumerate(df_rules.iterrows(), start=1):
-        ws_rules.append([idx, r_row.get("Ký hiệu", ""), r_row.get("Diễn giải", "")])
-
-    for r in range(4, 4 + len(df_rules)):
-        for c in range(1, 4):
-            cell = ws_rules.cell(row=r, column=c)
-            cell.border = thin_border
-            cell.font = Font(name="Arial", size=10)
-            cell.alignment = Alignment(
-                horizontal="center" if c in [1, 2] else "left",
-                vertical="center",
-            )
-
-    ws_rules.column_dimensions["A"].width = 8
-    ws_rules.column_dimensions["B"].width = 15
-    ws_rules.column_dimensions["C"].width = 50
-
-    ws_rules.protection.sheet = True
-    ws_rules.protection.password = "123456"
+    # Cấu hình Trang in A4 Khổ Ngang (Landscape)
+    ws_main.page_setup.orientation = ws_main.ORIENTATION_LANDSCAPE
+    ws_main.page_setup.paperSize = ws_main.PAPERSIZE_A4
+    ws_main.page_setup.fitToWidth = 1
+    ws_main.page_setup.fitToHeight = 0
+    ws_main.sheet_properties.pageSetUpPr.fitToPage = True
 
     output = io.BytesIO()
     wb.save(output)
@@ -645,7 +726,7 @@ def render_timekeeping_management():
                     st.rerun()
 
     # -----------------------------------------------------
-    # TAB 2: UPLOAD BẢNG CHẤM CÔNG (BỎ QUA 3 DÒNG HEADER ĐẦU)
+    # TAB 2: UPLOAD BẢNG CHẤM CÔNG
     # -----------------------------------------------------
     with tab2:
         st.markdown("##### 📤 Tải lên file Excel Bảng chấm công đã khai báo")
@@ -674,7 +755,6 @@ def render_timekeeping_management():
 
         if uploaded_tk_file:
             try:
-                # Đọc từ dòng 4 (skiprows=3) để lấy đúng tên cột Header
                 df_up = pd.read_excel(uploaded_tk_file, skiprows=3).fillna("")
                 if "STT" in df_up.columns:
                     df_up.drop(columns=["STT"], inplace=True)
