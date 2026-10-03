@@ -251,15 +251,39 @@ def generate_timekeeping_template(
         cell.alignment = Alignment(horizontal="center", vertical="center")
         cell.border = thin_border
 
-    valid_symbols = []
+    # Danh sách ký hiệu cơ bản từ cấu hình
+    all_symbols_dict = []
     for idx, (_, r_row) in enumerate(df_rules.iterrows(), start=1):
         sym = str(r_row.get("Ký hiệu", "")).strip().upper()
         if sym:
-            valid_symbols.append(sym)
-        ws_rules.append([idx, sym, r_row.get("Diễn giải", "")])
+            all_symbols_dict.append({
+                "sym": sym,
+                "desc": r_row.get("Diễn giải", ""),
+            })
 
-    num_rules = len(df_rules)
-    for r in range(4, 4 + num_rules):
+    # Tự động sinh danh sách các tổ hợp ghép 2 ký tự (Sáng - Chiều)
+    single_codes = ["X", "B", "P", "H", "CT", "Ô", "O", "R", "K", "T"]
+    existing_syms = {item["sym"] for item in all_symbols_dict}
+
+    for c1 in single_codes:
+        for c2 in single_codes:
+            pair = f"{c1}{c2}"
+            if pair not in existing_syms:
+                all_symbols_dict.append({
+                    "sym": pair,
+                    "desc": (
+                        f"Tổ hợp ghép: Sáng ({c1}) - Chiều ({c2})"
+                    ),
+                })
+                existing_syms.add(pair)
+
+    # Ghi toàn bộ ký hiệu hợp lệ vào Sheet QuyUocKyHieu
+    for idx, item in enumerate(all_symbols_dict, start=1):
+        ws_rules.append([idx, item["sym"], item["desc"]])
+
+    last_rule_row = 3 + len(all_symbols_dict)
+
+    for r in range(4, last_rule_row + 1):
         for c in range(1, 4):
             cell = ws_rules.cell(row=r, column=c)
             cell.border = thin_border
@@ -285,19 +309,19 @@ def generate_timekeeping_template(
         else "TOÀN BỆNH VIỆN"
     )
 
-    # 1. HÀNG 1: BỆNH VIỆN BƯU ĐIỆN (IN HOA, KHÔNG ĐẬM)
+    # 1. HÀNG 1: BỆNH VIỆN BƯU ĐIỆN
     ws_main["A1"] = "BỆNH VIỆN BƯU ĐIỆN"
     ws_main["A1"].font = Font(name="Arial", size=11, bold=False, color="000000")
     ws_main["A1"].alignment = Alignment(horizontal="left", vertical="center")
 
-    # 2. HÀNG 2: TÊN KHOA / PHÒNG / TRUNG TÂM (IN HOA, IN ĐẬM)
+    # 2. HÀNG 2: TÊN KHOA / PHÒNG / TRUNG TÂM
     ws_main["A2"] = unit_title
     ws_main["A2"].font = Font(name="Arial", size=11, bold=True, color="003366")
     ws_main["A2"].alignment = Alignment(horizontal="left", vertical="center")
 
     num_days = calendar.monthrange(year, month)[1]
 
-    # 3. HÀNG 3: TIÊU ĐỀ BẢNG CHẤM CÔNG CĂN GIỮA
+    # 3. HÀNG 3: TIÊU ĐỀ BẢNG CHẤM CÔNG
     day_headers = [f"{d:02d}/{month:02d}" for d in range(1, num_days + 1)]
     headers = ["STT", "Mã NV", "Họ và tên", "Chức vụ"] + day_headers
 
@@ -381,24 +405,14 @@ def generate_timekeeping_template(
                 cell.fill = day_fills[d_num]
 
     # ---------------------------------------------------------
-    # TẠO DANH SÁCH TẤT CẢ KÝ HIỆU HỢP LỆ (CHO PHÉP GHÉP 2 KÝ TỰ SÁNG - CHIỀU)
+    # DATA VALIDATION: THAM CHIẾU VÙNG DỮ LIỆU ĐỘNG TRONG SHEET QuyUocKyHieu
     # ---------------------------------------------------------
-    single_codes = ["X", "B", "P", "H", "CT", "Ô", "O", "R", "K", "T"]
-    allowed_list = list(valid_symbols)
+    # Tham chiếu trực tiếp đến danh sách ký hiệu tại Cột B trong sheet QuyUocKyHieu
+    rules_range_formula = f"QuyUocKyHieu!$B$4:$B${last_rule_row}"
 
-    # Sinh tự động tất cả các tổ hợp ghép 2 ký tự (Ví dụ: XB, BX, XP, PX...)
-    for c1 in single_codes:
-        for c2 in single_codes:
-            pair = f"{c1}{c2}"
-            if pair not in allowed_list:
-                allowed_list.append(pair)
-
-    validation_list_str = f'"{",".join(allowed_list)}"'
-
-    # Sử dụng Data Validation dạng LIST để Excel chấp nhận trực tiếp mọi ký hiệu ghép
     dv = DataValidation(
         type="list",
-        formula1=validation_list_str,
+        formula1=rules_range_formula,
         allow_blank=True,
         errorStyle="stop",
         showErrorMessage=True,
@@ -533,7 +547,6 @@ def parse_and_summarize(df_tk):
             if not val:
                 continue
 
-            # Các ký hiệu chuẩn quy ước
             if val == "XX":
                 res["c_cong"] += 1.0
             elif val == "X":
@@ -565,7 +578,6 @@ def parse_and_summarize(df_tk):
             elif val == "KO":
                 res["c_khl"] += 1.0
             elif len(val) == 2:
-                # Phân tách 2 ký tự ghép: Trái (Sáng) - Phải (Chiều)
                 left_char = val[0]
                 right_char = val[1]
                 process_single_char(left_char, res)
@@ -666,7 +678,6 @@ def render_timekeeping_management():
 
         st.markdown("---")
 
-        # BẢNG QUY ƯỚC KÝ HIỆU CHẤM CÔNG
         with st.expander(
             "⚙️ BẢNG QUY ƯỚC KÝ HIỆU CHẤM CÔNG CHUẨN BỘ Y TẾ & BỘ NỘI VỤ",
             expanded=True,
@@ -694,7 +705,7 @@ def render_timekeeping_management():
                     if btn_add_r:
                         if not f_kh or not f_dg:
                             st.error(
-                                "⚠️ Vui lòng nhập Ký hiệu và Diễn giải!"
+                                "⚠️️ Vui lòng nhập Ký hiệu và Diễn giải!"
                             )
                         else:
                             new_r = {
