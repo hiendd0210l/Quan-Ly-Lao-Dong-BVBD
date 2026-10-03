@@ -5,7 +5,7 @@ import streamlit as st
 from category_management import render_category_management
 from employee_management import render_employee_management
 from organization_management import render_organization_management
-
+from timekeeping_management import render_timekeeping_management
 # ---------------------------------------------------------
 # 1. CẤU HÌNH TRANG STREAMLIT
 # ---------------------------------------------------------
@@ -213,6 +213,8 @@ elif "Quản lý Cơ cấu Tổ chức" in menu_choice:
     render_organization_management()
 elif "Quản lý Hồ sơ Cán bộ" in menu_choice:
     render_employee_management()
+elif "Chấm công" in menu_choice:  # Thêm điều kiện này cho Menu 8
+    render_timekeeping_management()
 else:
     st.title(menu_choice)
     st.info("Chức năng đang được nâng cấp và phát triển.")
