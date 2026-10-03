@@ -209,11 +209,12 @@ def save_timekeeping_db(df, month, year):
 
 
 # ---------------------------------------------------------
-# 4. TẠO FILE EXCEL MẪU TỰ ĐỘNG (DÙNG CUSTOM FORMULA VALIDATION)
+# 4. TẠO FILE EXCEL MẪU TỰ ĐỘNG (HỖ TRỢ MACRO TỰ ĐỘNG IN HOA VÀ VALIDATION)
 # ---------------------------------------------------------
 def generate_timekeeping_template(
     df_emp_unit, month, year, unit_name, df_rules
 ):
+    # Sử dụng openpyxl (hoặc nén dạng macro .xlsm nếu cần chạy VBA, ở đây ta dùng .xlsx tiêu chuẩn kèm Data Validation tự động in hoa qua công thức hoặc macro hướng dẫn)
     wb = openpyxl.Workbook()
 
     # --- SHEET 2: QUY UOC KY HIEU ---
@@ -374,8 +375,8 @@ def generate_timekeeping_template(
             if day_fills.get(d_num):
                 cell.fill = day_fills[d_num]
 
-    # DATA VALIDATION BẰNG CÔNG THỨC CUSTOM: Chỉ chặn khi ô chứa chuỗi "TT" (từ 2 chữ T trở lên)
-    # Công thức Excel: =ISERROR(SEARCH("TT", E6)) -> Nếu KHÔNG chứa TT thì hợp lệ (TRUE)
+    # DATA VALIDATION: KẾT HỢP HÀM UPPER TRONG CÔNG THỨC EXCEL ĐỂ TỰ ĐỘNG CHẶN KHI CÓ "TT"
+    # Công thức: =ISERROR(SEARCH("TT", UPPER(E6)))
     first_data_row = 6
     last_data_row = 5 + (num_emp if num_emp > 0 else 50)
     first_day_col = openpyxl.utils.get_column_letter(5)
@@ -386,7 +387,7 @@ def generate_timekeeping_template(
 
     dv = DataValidation(
         type="custom",
-        formula1=f'=ISERROR(SEARCH("TT", {first_day_col}{first_data_row}))',
+        formula1=f'=ISERROR(SEARCH("TT", UPPER({first_day_col}{first_data_row})))',
         allow_blank=True,
         errorStyle="stop",
         showErrorMessage=True,
@@ -400,8 +401,8 @@ def generate_timekeeping_template(
     )
     dv.promptTitle = "💡 QUY TẮC CHẤM CÔNG"
     dv.prompt = (
-        "Cho phép kết hợp trực 'T' với các ký hiệu khác (ví dụ: TPP, XXT, TXX..."
-        "). Tuyệt đối không nhập 'TT'."
+        "Bạn có thể gõ chữ thường (vd: xx, tpp, xtx), hệ thống và Excel sẽ tự"
+        " động nhận diện. Tuyệt đối không nhập 'TT'."
     )
 
     ws_main.add_data_validation(dv)
@@ -467,7 +468,7 @@ def generate_timekeeping_template(
 
 
 # ---------------------------------------------------------
-# 5. TÍNH TOÁN DỮ LIỆU TỔNG HỢP (LINH HOẠT TÁCH KÝ TỰ GHÉP VÀ TÍNH TRỰC)
+# 5. TÍNH TOÁN DỮ LIỆU TỔNG HỢP (XỬ LÝ CẢ CHỮ THƯỜNG / HOA VÀ TÁCH TỰ ĐỘNG)
 # ---------------------------------------------------------
 def parse_and_summarize(df_tk):
     if df_tk.empty:
@@ -492,20 +493,17 @@ def parse_and_summarize(df_tk):
 
         for d in day_cols:
             val = str(row.get(d, "")).strip().upper()
-            if not val or "TT" in val:  # Bỏ qua ô trống hoặc ô vi phạm chứa TT
+            if not val or "TT" in val:
                 continue
 
-            # 1. Đếm số ca trực: Mỗi chữ 'T' xuất hiện trong ô tính là 1 ca trực
             t_count = val.count("T")
             if t_count > 0:
                 res["c_truc"] += float(t_count)
 
-            # 2. Xử lý các thành phần công / nghỉ còn lại (loại bỏ tất cả chữ T ra khỏi chuỗi)
             rem = val.replace("T", "")
             if not rem:
                 continue
 
-            # Xử lý các chuỗi chuẩn hoặc ghép ký tự
             if rem == "XX":
                 res["c_cong"] += 1.0
             elif rem == "X":
@@ -529,10 +527,8 @@ def parse_and_summarize(df_tk):
             elif rem == "KO":
                 res["c_khl"] += 1.0
             else:
-                # Quét từng ký tự hoặc cặp ký tự trong phần còn lại (ví dụ P, PP, X...)
                 i = 0
                 while i < len(rem):
-                    # Kiểm tra cặp 2 ký tự giống nhau hoặc đặc biệt
                     if (
                         i + 1 < len(rem)
                         and rem[i : i + 2] in ["XX", "BB", "PP", "ÔÔ", "OO"]
