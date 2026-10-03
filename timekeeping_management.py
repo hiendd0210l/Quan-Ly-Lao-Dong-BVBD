@@ -186,7 +186,7 @@ def load_timekeeping_db(month, year):
             return pd.DataFrame(res.data[0]["content"])
         return pd.DataFrame()
     except Exception:
-        return st.session_state.get(key_db, sd.DataFrame() if 'sd' in globals() else pd.DataFrame())
+        return st.session_state.get(key_db, pd.DataFrame())
 
 
 def save_timekeeping_db(df, month, year):
@@ -209,7 +209,7 @@ def save_timekeeping_db(df, month, year):
 
 
 # ---------------------------------------------------------
-# 4. TẠO FILE EXCEL MẪU (CUSTOM VALIDATION CHẶN 2 CHỮ T KHI 3 KÝ TỰ + TỰ ĐỘNG IN HOA)
+# 4. TẠO FILE EXCEL MẪU (SỬ DỤNG LIST VALIDATION ĐỂ TỰ ĐỘNG IN HOA & CHẶN TT)
 # ---------------------------------------------------------
 def generate_timekeeping_template(
     df_emp_unit, month, year, unit_name, df_rules
@@ -246,11 +246,38 @@ def generate_timekeeping_template(
     all_symbols_dict = []
     for idx, (_, r_row) in enumerate(df_rules.iterrows(), start=1):
         sym = str(r_row.get("Ký hiệu", "")).strip().upper()
-        if sym:
+        if sym and sym != "TT":
             all_symbols_dict.append({
                 "sym": sym,
                 "desc": r_row.get("Diễn giải", ""),
             })
+
+    # Tự động sinh danh sách các tổ hợp 2 và 3 ký tự hợp lệ (Loại bỏ tuyệt đối mọi trường hợp chứa từ 2 chữ T trở lên)
+    base_chars = ["X", "B", "P", "H", "CT", "Ô", "O", "R", "K", "T"]
+    existing_syms = {item["sym"] for item in all_symbols_dict}
+
+    # Sinh tổ hợp 2 ký tự
+    for c1 in base_chars:
+        for c2 in base_chars:
+            pair = f"{c1}{c2}"
+            if pair.count("T") < 2 and pair not in existing_syms:
+                all_symbols_dict.append({
+                    "sym": pair,
+                    "desc": f"Tổ hợp ghép: {c1} - {c2}",
+                })
+                existing_syms.add(pair)
+
+    # Sinh tổ hợp 3 ký tự phổ biến (ví dụ: TPP, XXT, TXX, XTX, PTP, XBT...) với điều kiện số lượng chữ T < 2
+    for c1 in ["X", "B", "P", "H", "T"]:
+        for c2 in ["X", "B", "P", "H", "T"]:
+            for c3 in ["X", "B", "P", "H", "T"]:
+                triplet = f"{c1}{c2}{c3}"
+                if triplet.count("T") < 2 and triplet not in existing_syms:
+                    all_symbols_dict.append({
+                        "sym": triplet,
+                        "desc": f"Tổ hợp 3 ký tự: {c1}-{c2}-{c3}",
+                    })
+                    existing_syms.add(triplet)
 
     for idx, item in enumerate(all_symbols_dict, start=1):
         ws_rules.append([idx, item["sym"], item["desc"]])
@@ -374,22 +401,12 @@ def generate_timekeeping_template(
             if day_fills.get(d_num):
                 cell.fill = day_fills[d_num]
 
-    # DATA VALIDATION: KẾT HỢP HÀM UPPER VÀ KIỂM TRA ĐIỀU KIỆN SỐ LƯỢNG CHỮ "T" KHI >= 3 KÝ TỰ
-    # Công thức Excel Custom: Nếu len(cell) >= 3 thì số lượng chữ T phải < 2 (không được chứa từ 2 chữ T trở lên)
-    # Cú pháp Excel: =IF(LEN(E6)>=3, (LEN(E6)-LEN(SUBSTITUTE(UPPER(E6),"T","")))<2, TRUE)
-    first_data_row = 6
-    last_data_row = 5 + (num_emp if num_emp > 0 else 50)
-    first_day_col = openpyxl.utils.get_column_letter(5)
-    last_day_col = openpyxl.utils.get_column_letter(4 + num_days)
-    target_range_str = (
-        f"{first_day_col}{first_data_row}:{last_day_col}{last_data_row}"
-    )
-
-    validation_formula = f'=IF(LEN({first_day_col}{first_data_row})>=3, (LEN({first_day_col}{first_data_row})-LEN(SUBSTITUTE(UPPER({first_day_col}{first_data_row}),"T","")))<2, TRUE)'
+    # DATA VALIDATION DẠNG LIST TRỎ TRỰC TIẾP VÀO BẢNG QUY ƯỚC (TỰ ĐỘNG IN HOA NGAY LẬP TỨC VÀ CHẶN TUYỆT ĐỐI TT)
+    rules_range_formula = f"QuyUocKyHieu!$B$4:$B${last_rule_row}"
 
     dv = DataValidation(
-        type="custom",
-        formula1=validation_formula,
+        type="list",
+        formula1=rules_range_formula,
         allow_blank=True,
         errorStyle="stop",
         showErrorMessage=True,
@@ -398,17 +415,23 @@ def generate_timekeeping_template(
 
     dv.errorTitle = "❌ KÝ HIỆU KHÔNG HỢP LỆ"
     dv.error = (
-        "Quy định: Khi nhập từ 3 ký tự trở lên trong 1 ô ngày, tuyệt đối không"
-        " được phép xuất hiện từ 2 chữ 'T' trở lên!"
+        "Ký hiệu nhập vào không đúng quy chuẩn hoặc vi phạm quy tắc (Không"
+        " được phép chứa từ 2 chữ 'T' trở lên như 'TT')!"
     )
     dv.promptTitle = "💡 QUY TẮC CHẤM CÔNG"
     dv.prompt = (
-        "Hệ thống tự động in hoa ký tự. Cho phép ghép thoải mái, riêng từ 3 ký"
-        " tự chỉ được phép chứa tối đa 1 chữ 'T'."
+        "Hệ thống tự động in hoa ký tự. Tuyệt đối không nhập từ 2 chữ 'T' trở"
+        " lên trong cùng một ô."
     )
 
     ws_main.add_data_validation(dv)
-    dv.add(target_range_str)
+
+    first_data_row = 6
+    last_data_row = 5 + (num_emp if num_emp > 0 else 50)
+    first_day_col = openpyxl.utils.get_column_letter(5)
+    last_day_col = openpyxl.utils.get_column_letter(4 + num_days)
+
+    dv.add(f"{first_day_col}{first_data_row}:{last_day_col}{last_data_row}")
 
     # --- KHU VỰC CHỮ KÝ IN ẤN A4 NẰM NGANG ---
     sign_row_header = last_data_row + 3
@@ -447,7 +470,9 @@ def generate_timekeeping_template(
     cell_sub_right = ws_main[f"{sign_right_start_col}{sign_sub_row}"]
     cell_sub_right.value = "(Ký tên, đóng dấu)"
     cell_sub_right.font = Font(name="Arial", size=9, italic=True)
-    cell_sub_right.alignment = Alignment(horizontal="center", vertical="center")
+    cell_sub_right.alignment = Alignment(
+        horizontal="center", vertical="center"
+    )
 
     ws_main.column_dimensions["A"].width = 6
     ws_main.column_dimensions["B"].width = 12
@@ -470,7 +495,7 @@ def generate_timekeeping_template(
 
 
 # ---------------------------------------------------------
-# 5. TÍNH TOÁN DỮ LIỆU TỔNG HỢP (XỬ LÝ ĐỒNG BỘ CẢ CHỮ THƯỜNG / HOA)
+# 5. TÍNH TOÁN DỮ LIỆU TỔNG HỢP (XỬ LÝ ĐỒNG BỘ)
 # ---------------------------------------------------------
 def parse_and_summarize(df_tk):
     if df_tk.empty:
@@ -495,14 +520,10 @@ def parse_and_summarize(df_tk):
 
         for d in day_cols:
             val = str(row.get(d, "")).strip().upper()
-            if not val:
+            if not val or val.count("T") >= 2:
                 continue
 
-            # Nếu độ dài >= 3 mà có từ 2 chữ T trở lên thì bỏ qua không tính (vi phạm quy tắc)
             t_count = val.count("T")
-            if len(val) >= 3 and t_count >= 2:
-                continue
-
             if t_count > 0:
                 res["c_truc"] += float(t_count)
 
@@ -663,6 +684,11 @@ def render_timekeeping_management():
                         if not f_kh or not f_dg:
                             st.error(
                                 "⚠️ Vui lòng nhập Ký hiệu và Diễn giải!"
+                            )
+                        elif "TT" in f_kh.upper():
+                            st.error(
+                                "❌ Ký hiệu chứa 'TT' không hợp lệ (Không được"
+                                " phép thừa ký tự T)!"
                             )
                         else:
                             new_r = {
