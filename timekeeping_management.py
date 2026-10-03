@@ -31,7 +31,7 @@ def init_supabase():
 supabase = init_supabase()
 
 # ---------------------------------------------------------
-# 2. QUY ƯỚC KÝ HIỆU CHẤM CÔNG MẶC ĐỊNH (CSDL)
+# 2. QUY ƯỚC KÝ HIỆU CHẤM CÔNG MẶC ĐỊNH
 # ---------------------------------------------------------
 DEFAULT_TIMEKEEPING_RULES = [
     {
@@ -292,7 +292,7 @@ DEFAULT_CAN_BO = [
 
 
 # ---------------------------------------------------------
-# 3. LOAD / SAVE QUY ƯỚC KÝ HIỆU & HỒ SƠ CÁN BỘ
+# 3. KẾT NỐI VÀ LƯU TRỮ CSDL
 # ---------------------------------------------------------
 def load_timekeeping_rules():
     if not supabase:
@@ -395,26 +395,23 @@ def save_timekeeping_db(df, month, year):
 
 
 # ---------------------------------------------------------
-# 4. KHỞI TẠO FILE EXCEL MẪU 2 SHEETS THEO ĐÚNG YÊU CẦU
+# 4. TẠO FILE EXCEL MẪU 2 SHEETS DÀNH CHO CÁC ĐƠN VỊ
 # ---------------------------------------------------------
 def generate_timekeeping_template(
     df_emp_unit, month, year, unit_name, df_rules
 ):
     wb = openpyxl.Workbook()
 
-    # --- SHEET 1: BANG CHAM CONG ---
+    # Sheet 1: Bảng chấm công
     ws_main = wb.active
     ws_main.title = f"ChamCong_T{month}_{year}"
 
-    # Tiêu đề in hoa chuẩn
     unit_title = (
         unit_name.upper()
         if unit_name != "Tất cả đơn vị"
         else "TOÀN BỆNH VIỆN"
     )
-    title_text = (
-        f"BẢNG CHẤM CÔNG THÁNG {month}/{year} CỦA {unit_title}"
-    )
+    title_text = f"BẢNG CHẤM CÔNG THÁNG {month}/{year} CỦA {unit_title}"
 
     ws_main.merge_cells("A1:AJ1")
     cell_title = ws_main["A1"]
@@ -422,16 +419,14 @@ def generate_timekeeping_template(
     cell_title.font = Font(name="Arial", size=14, bold=True, color="003366")
     cell_title.alignment = Alignment(horizontal="center", vertical="center")
 
-    # Dòng tiêu đề bảng
     num_days = calendar.monthrange(year, month)[1]
     headers = ["STT", "Mã NV", "Họ và tên", "Chức vụ", "Đơn vị"] + [
         f"Ngày {d:02d}" for d in range(1, num_days + 1)
     ]
 
-    ws_main.append([])  # Dòng trống A2
+    ws_main.append([])  # Dòng A2
     ws_main.append(headers)  # Dòng D3
 
-    # Style Header
     header_font = Font(name="Arial", size=10, bold=True, color="FFFFFF")
     header_fill = PatternFill(
         start_color="1F4E79", end_color="1F4E79", fill_type="solid"
@@ -450,7 +445,7 @@ def generate_timekeeping_template(
         cell.alignment = Alignment(horizontal="center", vertical="center")
         cell.border = thin_border
 
-    # Điền danh sách nhân viên - TRỐNG BẢNG CHẤM CÔNG (Không điền sẵn XX)
+    # Trống bảng chấm công (Không điền sẵn ký hiệu)
     for idx, (_, row) in enumerate(df_emp_unit.iterrows(), start=1):
         row_data = [
             idx,
@@ -460,10 +455,9 @@ def generate_timekeeping_template(
             row.get("Đơn vị", unit_name),
         ] + [
             "" for _ in range(num_days)
-        ]  # TRỐNG hoàn toàn ký hiệu chấm công
+        ]  # Để trống ô ngày
         ws_main.append(row_data)
 
-    # Style các ô dữ liệu
     for r in range(4, 4 + len(df_emp_unit)):
         for c in range(1, len(headers) + 1):
             cell = ws_main.cell(row=r, column=c)
@@ -479,7 +473,6 @@ def generate_timekeeping_template(
                     horizontal="center", vertical="center"
                 )
 
-    # Set độ rộng cột
     ws_main.column_dimensions["A"].width = 6
     ws_main.column_dimensions["B"].width = 12
     ws_main.column_dimensions["C"].width = 25
@@ -489,9 +482,8 @@ def generate_timekeeping_template(
         col_letter = openpyxl.utils.get_column_letter(col_idx)
         ws_main.column_dimensions[col_letter].width = 9
 
-    # --- SHEET 2: QUY UOC KY HIEU CHAM CONG ---
+    # Sheet 2: Quy ước ký hiệu kèm theo
     ws_rules = wb.create_sheet(title="QuyUocKyHieu")
-
     ws_rules["A1"] = "BẢNG QUY ƯỚC KÝ HIỆU CHẤM CÔNG CHUẨN BỘ Y TẾ & BỘ NỘI VỤ"
     ws_rules["A1"].font = Font(name="Arial", size=12, bold=True, color="003366")
 
@@ -532,7 +524,7 @@ def generate_timekeeping_template(
 
 
 # ---------------------------------------------------------
-# 5. TÍNH TOÁN VÀ TỔNG HỢP CHẤM CÔNG DỰA TRÊN QUY ƯỚC
+# 5. TÍNH TOÁN DỮ LIỆU TỔNG HỢP
 # ---------------------------------------------------------
 def parse_and_summarize(df_tk, df_rules):
     if df_tk.empty:
@@ -585,7 +577,7 @@ def parse_and_summarize(df_tk, df_rules):
 def render_timekeeping_management():
     st.subheader("⏰ Quản lý Chấm công - Ca trực - Phân lịch")
 
-    # Load quy ước ký hiệu
+    # Nạp quy ước ký hiệu
     if "df_tk_rules" not in st.session_state:
         st.session_state["df_tk_rules"] = load_timekeeping_rules()
 
@@ -606,7 +598,7 @@ def render_timekeeping_management():
     )
 
     # -----------------------------------------------------
-    # TAB 1: TẢI FILE EXCEL MẪU VÀ CẤU HÌNH QUY ƯỚC KÝ HIỆU
+    # TAB 1: TẢI FILE MẪU VÀ QUẢN LÝ THÊM / SỬA / XÓA / LƯU KÝ HIỆU
     # -----------------------------------------------------
     with tab1:
         st.markdown(
@@ -663,18 +655,119 @@ def render_timekeeping_management():
 
         st.markdown("---")
 
-        # --- EXPANDER: QUẢN LÝ THÊM / SỬA / XÓA / LƯU KÝ HIỆU CHẤM CÔNG ---
+        # --- KHU VỰC THÊM / SỬA / XÓA / LƯU KÝ HIỆU CHẤM CÔNG ---
         with st.expander(
-            "⚙️ BẢNG QUY ƯỚC KÝ HIỆU CHẤM CÔNG (THÊM / SỬA / XÓA / LƯU)",
+            "⚙️ BẢNG QUY ƯỚC KÝ HIỆU CHẤM CÔNG CHUẨN BỘ Y TẾ & BỘ NỘI VỤ",
             expanded=True,
         ):
+            # BỘ CÔNG CỤ TƯƠNG TÁC: THÊM & XÓA KÝ HIỆU
+            c_add_rule, c_del_rule = st.columns(2)
+
+            with c_add_rule:
+                st.markdown("**➕ Thêm / Khai báo Ký hiệu Chấm công mới**")
+                with st.form(key="form_add_rule", clear_on_submit=True):
+                    f_kh = st.text_input(
+                        "Ký hiệu mới (*):", placeholder="Ví dụ: TC"
+                    )
+                    f_dg = st.text_input(
+                        "Tên ký hiệu / Diễn giải (*):",
+                        placeholder="Ví dụ: Tăng cường trực",
+                    )
+
+                    fc1, fc2, fc3 = st.columns(3)
+                    with fc1:
+                        f_cong = st.number_input(
+                            "Quy đổi Công:", min_value=0.0, max_value=2.0, step=0.5, value=1.0
+                        )
+                        f_truc = st.number_input(
+                            "Quy đổi Trực:", min_value=0.0, max_value=2.0, step=0.5, value=0.0
+                        )
+                    with fc2:
+                        f_b = st.number_input(
+                            "Nghỉ bù:", min_value=0.0, max_value=2.0, step=0.5, value=0.0
+                        )
+                        f_p = st.number_input(
+                            "Nghỉ phép:", min_value=0.0, max_value=2.0, step=0.5, value=0.0
+                        )
+                    with fc3:
+                        f_o = st.number_input(
+                            "Nghỉ ốm:", min_value=0.0, max_value=2.0, step=0.5, value=0.0
+                        )
+                        f_khl = st.number_input(
+                            "Không lương:", min_value=0.0, max_value=2.0, step=0.5, value=0.0
+                        )
+
+                    btn_add_r = st.form_submit_button("Thêm Ký hiệu vào Bảng")
+
+                    if btn_add_r:
+                        if not f_kh or not f_dg:
+                            st.error(
+                                "⚠️ Vui lòng điền Ký hiệu và Diễn giải!"
+                            )
+                        else:
+                            new_r = {
+                                "Ký hiệu": f_kh.upper(),
+                                "Diễn giải": f_dg,
+                                "Công": f_cong,
+                                "Trực": f_truc,
+                                "Nghỉ bù": f_b,
+                                "Nghỉ phép": f_p,
+                                "Nghỉ ốm": f_o,
+                                "Không lương": f_khl,
+                            }
+                            st.session_state["df_tk_rules"] = pd.concat(
+                                [
+                                    st.session_state["df_tk_rules"],
+                                    pd.DataFrame([new_r]),
+                                ],
+                                ignore_index=True,
+                            ).drop_duplicates(subset=["Ký hiệu"], keep="last")
+                            save_timekeeping_rules(
+                                st.session_state["df_tk_rules"]
+                            )
+                            st.success(f"✅ Đã thêm ký hiệu '{f_kh.upper()}'!")
+                            st.rerun()
+
+            with c_del_rule:
+                st.markdown("**🗑️ Xóa Ký hiệu Chấm công**")
+                current_kh_list = list(
+                    st.session_state["df_tk_rules"]["Ký hiệu"].unique()
+                )
+                selected_del_kh = st.multiselect(
+                    "Chọn danh sách Ký hiệu muốn xóa:",
+                    options=current_kh_list,
+                    key="msel_del_rules",
+                )
+                if st.button(
+                    "❌ Xóa Ký hiệu đã chọn",
+                    type="primary",
+                    key="btn_del_rules",
+                ):
+                    if selected_del_kh:
+                        st.session_state["df_tk_rules"] = st.session_state[
+                            "df_tk_rules"
+                        ][
+                            ~st.session_state["df_tk_rules"]["Ký hiệu"].isin(
+                                selected_del_kh
+                            )
+                        ].reset_index(
+                            drop=True
+                        )
+                        save_timekeeping_rules(st.session_state["df_tk_rules"])
+                        st.success("✅ Đã xóa thành công các ký hiệu đã chọn!")
+                        st.rerun()
+                    else:
+                        st.warning("Vui lòng chọn ít nhất 1 ký hiệu để xóa.")
+
+            st.markdown("---")
             st.markdown(
-                "Chỉnh sửa trực tiếp quy ước quy đổi công, trực, nghỉ phép..."
-                " bên dưới:"
+                "**✏️ Sửa trực tiếp quy ước và Nhấn nút 'Lưu Bảng Quy ước' để"
+                " cập nhật CSDL:**"
             )
 
+            # Bảng data_editor cho phép SỬA trực tiếp
             edited_rules = st.data_editor(
-                df_rules,
+                st.session_state["df_tk_rules"],
                 use_container_width=True,
                 num_rows="dynamic",
                 key="editor_tk_rules",
@@ -690,8 +783,8 @@ def render_timekeeping_management():
                     st.session_state["df_tk_rules"] = edited_rules
                     if save_timekeeping_rules(edited_rules):
                         st.success(
-                            "✅ Đã lưu Quy ước ký hiệu chấm công vào CSDL"
-                            " Supabase!"
+                            "✅ Đã lưu Bảng quy ước ký hiệu chấm công vào CSDL"
+                            " Supabase thành công!"
                         )
                         st.rerun()
 
@@ -732,9 +825,7 @@ def render_timekeeping_management():
 
         if uploaded_tk_file:
             try:
-                # Đọc bỏ qua dòng tiêu đề nếu cần
                 df_up = pd.read_excel(uploaded_tk_file, skiprows=2).fillna("")
-                # Xóa cột STT thừa nếu có
                 if "STT" in df_up.columns:
                     df_up.drop(columns=["STT"], inplace=True)
 
@@ -920,7 +1011,6 @@ def render_timekeeping_management():
             )
             selected_months = list(range(m_start, m_end + 1))
 
-        # Tổng hợp dữ liệu các tháng đã chọn
         all_dfs = []
         for m in selected_months:
             df_m = load_timekeeping_db(m, rep_year)
