@@ -186,7 +186,7 @@ def load_timekeeping_db(month, year):
             return pd.DataFrame(res.data[0]["content"])
         return pd.DataFrame()
     except Exception:
-        return st.session_state.get(key_db, pd.DataFrame())
+        return st.session_state.get(key_db, sd.DataFrame() if 'sd' in globals() else pd.DataFrame())
 
 
 def save_timekeeping_db(df, month, year):
@@ -209,7 +209,7 @@ def save_timekeeping_db(df, month, year):
 
 
 # ---------------------------------------------------------
-# 4. TẠO FILE EXCEL MẪU (SỬ DỤNG CUSTOM VALIDATION CHO PHÉP GHÉP TỰ DO & CHẶN "TT")
+# 4. TẠO FILE EXCEL MẪU (CUSTOM VALIDATION CHẶN 2 CHỮ T KHI 3 KÝ TỰ + TỰ ĐỘNG IN HOA)
 # ---------------------------------------------------------
 def generate_timekeeping_template(
     df_emp_unit, month, year, unit_name, df_rules
@@ -374,7 +374,9 @@ def generate_timekeeping_template(
             if day_fills.get(d_num):
                 cell.fill = day_fills[d_num]
 
-    # DATA VALIDATION: SỬ DỤNG CÔNG THỨC CUSTOM CHO PHÉP MỌI KÝ TỰ GHÉP VÀ CHẶN DUY NHẤT KHI CÓ "TT"
+    # DATA VALIDATION: KẾT HỢP HÀM UPPER VÀ KIỂM TRA ĐIỀU KIỆN SỐ LƯỢNG CHỮ "T" KHI >= 3 KÝ TỰ
+    # Công thức Excel Custom: Nếu len(cell) >= 3 thì số lượng chữ T phải < 2 (không được chứa từ 2 chữ T trở lên)
+    # Cú pháp Excel: =IF(LEN(E6)>=3, (LEN(E6)-LEN(SUBSTITUTE(UPPER(E6),"T","")))<2, TRUE)
     first_data_row = 6
     last_data_row = 5 + (num_emp if num_emp > 0 else 50)
     first_day_col = openpyxl.utils.get_column_letter(5)
@@ -383,10 +385,11 @@ def generate_timekeeping_template(
         f"{first_day_col}{first_data_row}:{last_day_col}{last_data_row}"
     )
 
-    # Công thức Excel: =ISERROR(SEARCH("TT", E6)) -> Cho phép nhập mọi chữ cái gộp thoải mái (PTP, TXX, XXT...), chỉ chặn khi gõ "TT"
+    validation_formula = f'=IF(LEN({first_day_col}{first_data_row})>=3, (LEN({first_day_col}{first_data_row})-LEN(SUBSTITUTE(UPPER({first_day_col}{first_data_row}),"T","")))<2, TRUE)'
+
     dv = DataValidation(
         type="custom",
-        formula1=f'=ISERROR(SEARCH("TT", {first_day_col}{first_data_row}))',
+        formula1=validation_formula,
         allow_blank=True,
         errorStyle="stop",
         showErrorMessage=True,
@@ -395,13 +398,13 @@ def generate_timekeeping_template(
 
     dv.errorTitle = "❌ KÝ HIỆU KHÔNG HỢP LỆ"
     dv.error = (
-        "Không được phép nhập từ 2 chữ T trở lên trong cùng 1 ngày (Lỗi thừa"
-        " 'TT')!"
+        "Quy định: Khi nhập từ 3 ký tự trở lên trong 1 ô ngày, tuyệt đối không"
+        " được phép xuất hiện từ 2 chữ 'T' trở lên!"
     )
     dv.promptTitle = "💡 QUY TẮC CHẤM CÔNG"
     dv.prompt = (
-        "Cho phép gộp tự do các ký hiệu và trực 'T' (Ví dụ: PTP, TXX, XXT...). Chỉ"
-        " chặn nếu nhập 'TT'."
+        "Hệ thống tự động in hoa ký tự. Cho phép ghép thoải mái, riêng từ 3 ký"
+        " tự chỉ được phép chứa tối đa 1 chữ 'T'."
     )
 
     ws_main.add_data_validation(dv)
@@ -444,9 +447,7 @@ def generate_timekeeping_template(
     cell_sub_right = ws_main[f"{sign_right_start_col}{sign_sub_row}"]
     cell_sub_right.value = "(Ký tên, đóng dấu)"
     cell_sub_right.font = Font(name="Arial", size=9, italic=True)
-    cell_sub_right.alignment = Alignment(
-        horizontal="center", vertical="center"
-    )
+    cell_sub_right.alignment = Alignment(horizontal="center", vertical="center")
 
     ws_main.column_dimensions["A"].width = 6
     ws_main.column_dimensions["B"].width = 12
@@ -469,7 +470,7 @@ def generate_timekeeping_template(
 
 
 # ---------------------------------------------------------
-# 5. TÍNH TOÁN DỮ LIỆU TỔNG HỢP (LINH HOẠT GỢI Ý MỌI TỔ HỢP)
+# 5. TÍNH TOÁN DỮ LIỆU TỔNG HỢP (XỬ LÝ ĐỒNG BỘ CẢ CHỮ THƯỜNG / HOA)
 # ---------------------------------------------------------
 def parse_and_summarize(df_tk):
     if df_tk.empty:
@@ -494,31 +495,27 @@ def parse_and_summarize(df_tk):
 
         for d in day_cols:
             val = str(row.get(d, "")).strip().upper()
-            if not val or "TT" in val:
+            if not val:
                 continue
 
-            # Đếm số ca trực dựa trên tổng số chữ T xuất hiện trong chuỗi ô đó
+            # Nếu độ dài >= 3 mà có từ 2 chữ T trở lên thì bỏ qua không tính (vi phạm quy tắc)
             t_count = val.count("T")
+            if len(val) >= 3 and t_count >= 2:
+                continue
+
             if t_count > 0:
                 res["c_truc"] += float(t_count)
 
-            # Loại bỏ tất cả chữ T để quét và cộng dồn các ký tự công/nghỉ còn lại
             rem = val.replace("T", "")
             if not rem:
                 continue
 
-            # Quét nhận diện tự động từng nhóm ký tự hoặc ký tự đơn
             i = 0
             while i < len(rem):
-                # Kiểm tra các cặp ký tự đôi phổ biến
-                if i + 1 < len(rem) and rem[i : i + 2] in [
-                    "XX",
-                    "BB",
-                    "PP",
-                    "ÔÔ",
-                    "OO",
-                    "HH",
-                ]:
+                if (
+                    i + 1 < len(rem)
+                    and rem[i : i + 2] in ["XX", "BB", "PP", "ÔÔ", "OO", "HH"]
+                ):
                     pair = rem[i : i + 2]
                     if pair in ["XX", "HH"]:
                         res["c_cong"] += 1.0
@@ -666,11 +663,6 @@ def render_timekeeping_management():
                         if not f_kh or not f_dg:
                             st.error(
                                 "⚠️ Vui lòng nhập Ký hiệu và Diễn giải!"
-                            )
-                        elif "TT" in f_kh.upper():
-                            st.error(
-                                "❌ Ký hiệu chứa 'TT' không hợp lệ (Không được"
-                                " phép thừa ký tự T)!"
                             )
                         else:
                             new_r = {
@@ -980,7 +972,7 @@ def render_timekeeping_management():
             )
             selected_months = list(range(m_start, m_end + 1))
 
-            all_dfs = []
+        all_dfs = []
         for m in selected_months:
             df_m = load_timekeeping_db(m, rep_year)
             if not df_m.empty:
