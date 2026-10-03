@@ -217,7 +217,7 @@ def save_timekeeping_db(df, month, year):
 
 
 # ---------------------------------------------------------
-# 4. TẠO FILE EXCEL MẪU CÓ CHẶN HOÀN TOÀN + TỰ ĐỘNG IN HOA
+# 4. TẠO FILE EXCEL MẪU CHẤP NHẬN CHỮ HOA & CHỮ THƯỜNG
 # ---------------------------------------------------------
 def generate_timekeeping_template(
     df_emp_unit, month, year, unit_name, df_rules
@@ -253,7 +253,7 @@ def generate_timekeeping_template(
 
     valid_symbols = []
     for idx, (_, r_row) in enumerate(df_rules.iterrows(), start=1):
-        sym = str(r_row.get("Ký hiệu", "")).strip()
+        sym = str(r_row.get("Ký hiệu", "")).strip().upper()
         if sym:
             valid_symbols.append(sym)
         ws_rules.append([idx, sym, r_row.get("Diễn giải", "")])
@@ -376,23 +376,15 @@ def generate_timekeeping_template(
             if day_fills.get(d_num):
                 cell.fill = day_fills[d_num]
 
-    # --- TẠO DANH SÁCH CHẤP NHẬN CẢ HOA VÀ THƯỜNG TRONG DATA VALIDATION ---
-    combined_symbols = []
-    for s in valid_symbols:
-        s_upper = s.upper()
-        s_lower = s.lower()
-        if s_upper not in combined_symbols:
-            combined_symbols.append(s_upper)
-        if s_lower not in combined_symbols:
-            combined_symbols.append(s_lower)
-
-    formula_str = f'"{",".join(combined_symbols)}"'
+    # --- KHẮC PHỤC CHÍNH XÁC: SỬ DỤNG CÔNG THỨC CUSTOM ĐỂ KHÔNG PHÂN BIỆT HOA/THƯỜNG ---
+    # Công thức kiểm tra: ISNUMBER(MATCH(UPPER(E5), QuyUocKyHieu!$B$4:$B$24, 0))
+    rule_range_ref = f"QuyUocKyHieu!$B$4:$B${3 + num_rules}"
+    custom_formula = f"=ISNUMBER(MATCH(UPPER(E5), {rule_range_ref}, 0))"
 
     dv = DataValidation(
-        type="list",
-        formula1=formula_str,
+        type="custom",
+        formula1=custom_formula,
         allow_blank=True,
-        showDropDown=True,
         errorStyle="stop",
         showErrorMessage=True,
         showInputMessage=True,
@@ -400,13 +392,12 @@ def generate_timekeeping_template(
 
     dv.errorTitle = "❌ KÝ HIỆU KHÔNG HỢP LỆ"
     dv.error = (
-        "Ký hiệu nhập vào KHÔNG CÓ trong Bảng quy ước!\nVui lòng chọn hoặc"
-        " nhập lại đúng ký hiệu chuẩn."
+        "Ký hiệu nhập vào KHÔNG CÓ trong Bảng quy ước!\nVui lòng nhập đúng"
+        " ký hiệu được phép."
     )
     dv.promptTitle = "💡 LƯU Ý CHẤM CÔNG"
     dv.prompt = (
-        "Bạn có thể nhập chữ HOA hoặc chữ thường (Hệ thống sẽ tự động chuyển"
-        " thành chữ IN HOA)."
+        "Có thể nhập chữ HOA hoặc chữ THƯỜNG (Ví dụ: xx hoặc XX đều hợp lệ)."
     )
 
     ws_main.add_data_validation(dv)
@@ -485,7 +476,7 @@ def generate_timekeeping_template(
 
 
 # ---------------------------------------------------------
-# 5. TÍNH TOÁN DỮ LIỆU TỔNG HỢP (TỰ ĐỘNG CHUYỂN IN HOA KHI ĐỌC VÀ LƯU CSDL)
+# 5. TÍNH TOÁN DỮ LIỆU TỔNG HỢP
 # ---------------------------------------------------------
 def parse_and_summarize(df_tk):
     if df_tk.empty:
@@ -741,7 +732,7 @@ def render_timekeeping_management():
                     st.rerun()
 
     # -----------------------------------------------------
-    # TAB 2: UPLOAD BẢNG CHẤM CÔNG (TỰ ĐỘNG CHUYỂN IN HOA TOÀN BỘ Ô CÔNG)
+    # TAB 2: UPLOAD BẢNG CHẤM CÔNG (TỰ ĐỘNG CHUYỂN IN HOA CÁC CỘT CHẤM CÔNG)
     # -----------------------------------------------------
     with tab2:
         st.markdown("##### 📤 Tải lên file Excel Bảng chấm công đã khai báo")
@@ -774,7 +765,7 @@ def render_timekeeping_management():
                 if "STT" in df_up.columns:
                     df_up.drop(columns=["STT"], inplace=True)
 
-                # TỰ ĐỘNG CHUYỂN THÀNH IN HOA TRƯỚC KHI LƯU VÀO CSDL
+                # Chuyển đổi toàn bộ ô chấm công sang IN HOA
                 day_cols = [
                     c
                     for c in df_up.columns
@@ -784,8 +775,8 @@ def render_timekeeping_management():
                     df_up[d] = df_up[d].astype(str).str.upper()
 
                 st.write(
-                    "📌 **Dữ liệu đọc từ file chấm công (Đã tự động chuyển thành"
-                    " IN HOA):**"
+                    "📌 **Dữ liệu đọc từ file chấm công (Đã chuyển thành IN"
+                    " HOA):**"
                 )
                 st.dataframe(df_up.head(10), use_container_width=True)
 
