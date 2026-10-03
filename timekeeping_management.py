@@ -59,7 +59,7 @@ DEFAULT_TIMEKEEPING_RULES = [
     {"Ký hiệu": "TS", "Diễn giải": "1 ngày nghỉ thai sản"},
 ]
 
-# Cập nhật chính xác danh sách Tên Đơn vị từ tệp Mau_đơn_vị.xlsx
+# Danh sách Đơn vị chuẩn dự phòng (được đồng bộ từ Danh mục hệ thống / Mau_đơn_vị.xlsx)
 DEFAULT_DON_VI = [
     "Ban Giám đốc",
     "Phòng Nhân sự - Tổng hợp",
@@ -137,8 +137,45 @@ DEFAULT_CAN_BO = [
 
 
 # ---------------------------------------------------------
-# 3. KẾT NỐI VÀ LƯU TRỮ CSDL
+# 3. KẾT NỐI VÀ LƯU TRỮ CSDL (ĐỒNG BỘ DANH MỤC ĐƠN VỊ)
 # ---------------------------------------------------------
+def load_unit_list():
+    """Đồng bộ danh sách đơn vị trực tiếp từ menu Danh mục hệ thống trên CSDL"""
+    if not supabase:
+        return DEFAULT_DON_VI
+    try:
+        # Thử truy vấn các khóa danh mục đơn vị thường dùng trong hệ thống
+        for key in ["don_vi", "units", "departments", "khoa_phong"]:
+            res = (
+                supabase.table("categories")
+                .select("content")
+                .eq("cat_key", key)
+                .execute()
+            )
+            if res.data and res.data[0].get("content"):
+                content = res.data[0]["content"]
+                if isinstance(content, list):
+                    units = []
+                    for item in content:
+                        if isinstance(item, dict):
+                            # Lấy tên đơn vị từ các trường phổ biến
+                            u_name = (
+                                item.get("Tên Đơn vị")
+                                or item.get("Đơn vị")
+                                or item.get("TenDonVi")
+                                or item.get("name")
+                            )
+                            if u_name:
+                                units.append(str(u_name).strip())
+                        elif isinstance(item, str):
+                            units.append(item.strip())
+                    if units:
+                        return units
+        return DEFAULT_DON_VI
+    except Exception:
+        return DEFAULT_DON_VI
+
+
 def load_timekeeping_rules():
     if not supabase:
         return pd.DataFrame(DEFAULT_TIMEKEEPING_RULES)
@@ -241,7 +278,7 @@ def save_timekeeping_db(df, month, year):
 
 
 # ---------------------------------------------------------
-# 4. TẠO FILE EXCEL MẪU (GIỮ NGUYÊN HOÀN TOÀN CƠ CHẾ VALIDATION & TỰ ĐỘNG IN HOA)
+# 4. TẠO FILE EXCEL MẪU
 # ---------------------------------------------------------
 def generate_timekeeping_template(
     df_emp_unit, month, year, unit_name, df_rules
@@ -523,7 +560,7 @@ def generate_timekeeping_template(
 
 
 # ---------------------------------------------------------
-# 5. TÍNH TOÁN DỮ LIỆU TỔNG HỢP (GIỮ NGUYÊN LOGIC XỬ LÝ)
+# 5. TÍNH TOÁN DỮ LIỆU TỔNG HỢP
 # ---------------------------------------------------------
 def parse_and_summarize(df_tk):
     if df_tk.empty:
@@ -620,7 +657,8 @@ def render_timekeeping_management():
     ])
 
     df_emp_all = load_employees()
-    unit_list = DEFAULT_DON_VI
+    # Tự động đồng bộ danh sách đơn vị từ Danh mục hệ thống
+    unit_list = load_unit_list()
 
     # -----------------------------------------------------
     # TAB 1: TẢI FILE MẪU EXCEL
