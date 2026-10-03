@@ -1,9 +1,12 @@
-import io
 import calendar
-from datetime import datetime, date
+from datetime import date, datetime
+import io
+import openpyxl
+from openpyxl.styles import Alignment, Border, Font, PatternFill, Side
 import pandas as pd
 import streamlit as st
 from supabase import create_client
+
 
 # ---------------------------------------------------------
 # 1. KẾT NỐI SUPABASE
@@ -12,7 +15,10 @@ from supabase import create_client
 def init_supabase():
     try:
         url = st.secrets.get("SUPABASE_URL", "").strip()
-        key = (st.secrets.get("SUPABASE_KEY") or st.secrets.get("SUPABASE_SERVICE_KEY", "")).strip()
+        key = (
+            st.secrets.get("SUPABASE_KEY")
+            or st.secrets.get("SUPABASE_SERVICE_KEY", "")
+        ).strip()
         if not url or not key:
             return None
         if not url.startswith("https://"):
@@ -21,82 +27,353 @@ def init_supabase():
     except Exception:
         return None
 
+
 supabase = init_supabase()
 
 # ---------------------------------------------------------
-# 2. QUY ƯỚC KÝ HIỆU CHẤM CÔNG (THEO FILE TÀI LIỆU QUY ĐỊNH)
+# 2. QUY ƯỚC KÝ HIỆU CHẤM CÔNG MẶC ĐỊNH (CSDL)
 # ---------------------------------------------------------
-TIMEKEEPING_RULES = {
-    "X":    {"desc": "½ ngày công làm việc giờ hành chính", "cong": 0.5, "truc": 0, "p": 0, "b": 0, "o": 0, "khl": 0},
-    "XX":   {"desc": "1 ngày công làm việc giờ hành chính", "cong": 1.0, "truc": 0, "p": 0, "b": 0, "o": 0, "khl": 0},
-    "T":    {"desc": "1 ngày trực ngoài giờ hành chính", "cong": 0.0, "truc": 1.0, "p": 0, "b": 0, "o": 0, "khl": 0},
-    "B":    {"desc": "½ ngày nghỉ bù trực hưởng nguyên lương", "cong": 0.0, "truc": 0, "p": 0, "b": 0.5, "o": 0, "khl": 0},
-    "BB":   {"desc": "1 ngày nghỉ bù trực hưởng nguyên lương", "cong": 0.0, "truc": 0, "p": 0, "b": 1.0, "o": 0, "khl": 0},
-    "XTX":  {"desc": "1 ngày công hành chính + 1 ngày trực ngoài giờ", "cong": 1.0, "truc": 1.0, "p": 0, "b": 0, "o": 0, "khl": 0},
-    "BTB":  {"desc": "1 ngày nghỉ bù trực + 1 ngày trực ngoài giờ", "cong": 0.0, "truc": 1.0, "p": 0, "b": 1.0, "o": 0, "khl": 0},
-    "P":    {"desc": "½ ngày nghỉ phép", "cong": 0.0, "truc": 0, "p": 0.5, "b": 0, "o": 0, "khl": 0},
-    "PP":   {"desc": "1 ngày nghỉ phép", "cong": 0.0, "truc": 0, "p": 1.0, "b": 0, "o": 0, "khl": 0},
-    "H":    {"desc": "½ ngày đi học", "cong": 0.5, "truc": 0, "p": 0, "b": 0, "o": 0, "khl": 0},
-    "HH":   {"desc": "1 ngày đi học", "cong": 1.0, "truc": 0, "p": 0, "b": 0, "o": 0, "khl": 0},
-    "CT":   {"desc": "½ ngày đi công tác", "cong": 0.5, "truc": 0, "p": 0, "b": 0, "o": 0, "khl": 0},
-    "CTCT": {"desc": "1 ngày đi công tác", "cong": 1.0, "truc": 0, "p": 0, "b": 0, "o": 0, "khl": 0},
-    "Ô":    {"desc": "½ ngày nghỉ ốm", "cong": 0.0, "truc": 0, "p": 0, "b": 0, "o": 0.5, "khl": 0},
-    "O":    {"desc": "½ ngày nghỉ ốm (Không dấu)", "cong": 0.0, "truc": 0, "p": 0, "b": 0, "o": 0.5, "khl": 0},
-    "ÔÔ":   {"desc": "1 ngày nghỉ ốm", "cong": 0.0, "truc": 0, "p": 0, "b": 0, "o": 1.0, "khl": 0},
-    "OO":   {"desc": "1 ngày nghỉ ốm (Không dấu)", "cong": 0.0, "truc": 0, "p": 0, "b": 0, "o": 1.0, "khl": 0},
-    "CO":   {"desc": "½ ngày nghỉ con ốm", "cong": 0.0, "truc": 0, "p": 0, "b": 0, "o": 0.5, "khl": 0},
-    "COCO": {"desc": "1 ngày nghỉ con ốm", "cong": 0.0, "truc": 0, "p": 0, "b": 0, "o": 1.0, "khl": 0},
-    "R":    {"desc": "½ ngày nghỉ việc riêng hưởng lương", "cong": 0.5, "truc": 0, "p": 0, "b": 0, "o": 0, "khl": 0},
-    "RR":   {"desc": "1 ngày nghỉ việc riêng hưởng lương", "cong": 1.0, "truc": 0, "p": 0, "b": 0, "o": 0, "khl": 0},
-    "KO":   {"desc": "1 ngày nghỉ không hưởng lương", "cong": 0.0, "truc": 0, "p": 0, "b": 0, "o": 0, "khl": 1.0},
-    "TS":   {"desc": "1 ngày nghỉ thai sản", "cong": 0.0, "truc": 0, "p": 0, "b": 0, "o": 0, "khl": 0},
-}
+DEFAULT_TIMEKEEPING_RULES = [
+    {
+        "Ký hiệu": "X",
+        "Diễn giải": "½ ngày công làm việc giờ hành chính",
+        "Công": 0.5,
+        "Trực": 0.0,
+        "Nghỉ bù": 0.0,
+        "Nghỉ phép": 0.0,
+        "Nghỉ ốm": 0.0,
+        "Không lương": 0.0,
+    },
+    {
+        "Ký hiệu": "XX",
+        "Diễn giải": "1 ngày công làm việc giờ hành chính",
+        "Công": 1.0,
+        "Trực": 0.0,
+        "Nghỉ bù": 0.0,
+        "Nghỉ phép": 0.0,
+        "Nghỉ ốm": 0.0,
+        "Không lương": 0.0,
+    },
+    {
+        "Ký hiệu": "T",
+        "Diễn giải": "1 ngày trực ngoài giờ hành chính",
+        "Công": 0.0,
+        "Trực": 1.0,
+        "Nghỉ bù": 0.0,
+        "Nghỉ phép": 0.0,
+        "Nghỉ ốm": 0.0,
+        "Không lương": 0.0,
+    },
+    {
+        "Ký hiệu": "B",
+        "Diễn giải": "½ ngày nghỉ bù trực hưởng nguyên lương",
+        "Công": 0.0,
+        "Trực": 0.0,
+        "Nghỉ bù": 0.5,
+        "Nghỉ phép": 0.0,
+        "Nghỉ ốm": 0.0,
+        "Không lương": 0.0,
+    },
+    {
+        "Ký hiệu": "BB",
+        "Diễn giải": "1 ngày nghỉ bù trực hưởng nguyên lương",
+        "Công": 0.0,
+        "Trực": 0.0,
+        "Nghỉ bù": 1.0,
+        "Nghỉ phép": 0.0,
+        "Nghỉ ốm": 0.0,
+        "Không lương": 0.0,
+    },
+    {
+        "Ký hiệu": "XTX",
+        "Diễn giải": "1 ngày công hành chính + 1 ngày trực ngoài giờ",
+        "Công": 1.0,
+        "Trực": 1.0,
+        "Nghỉ bù": 0.0,
+        "Nghỉ phép": 0.0,
+        "Nghỉ ốm": 0.0,
+        "Không lương": 0.0,
+    },
+    {
+        "Ký hiệu": "BTB",
+        "Diễn giải": "1 ngày nghỉ bù trực + 1 ngày trực ngoài giờ",
+        "Công": 0.0,
+        "Trực": 1.0,
+        "Nghỉ bù": 1.0,
+        "Nghỉ phép": 0.0,
+        "Nghỉ ốm": 0.0,
+        "Không lương": 0.0,
+    },
+    {
+        "Ký hiệu": "P",
+        "Diễn giải": "½ ngày nghỉ phép",
+        "Công": 0.0,
+        "Trực": 0.0,
+        "Nghỉ bù": 0.0,
+        "Nghỉ phép": 0.5,
+        "Nghỉ ốm": 0.0,
+        "Không lương": 0.0,
+    },
+    {
+        "Ký hiệu": "PP",
+        "Diễn giải": "1 ngày nghỉ phép",
+        "Công": 0.0,
+        "Trực": 0.0,
+        "Nghỉ bù": 0.0,
+        "Nghỉ phép": 1.0,
+        "Nghỉ ốm": 0.0,
+        "Không lương": 0.0,
+    },
+    {
+        "Ký hiệu": "H",
+        "Diễn giải": "½ ngày đi học",
+        "Công": 0.5,
+        "Trực": 0.0,
+        "Nghỉ bù": 0.0,
+        "Nghỉ phép": 0.0,
+        "Nghỉ ốm": 0.0,
+        "Không lương": 0.0,
+    },
+    {
+        "Ký hiệu": "HH",
+        "Diễn giải": "1 ngày đi học",
+        "Công": 1.0,
+        "Trực": 0.0,
+        "Nghỉ bù": 0.0,
+        "Nghỉ phép": 0.0,
+        "Nghỉ ốm": 0.0,
+        "Không lương": 0.0,
+    },
+    {
+        "Ký hiệu": "CT",
+        "Diễn giải": "½ ngày đi công tác",
+        "Công": 0.5,
+        "Trực": 0.0,
+        "Nghỉ bù": 0.0,
+        "Nghỉ phép": 0.0,
+        "Nghỉ ốm": 0.0,
+        "Không lương": 0.0,
+    },
+    {
+        "Ký hiệu": "CTCT",
+        "Diễn giải": "1 ngày đi công tác",
+        "Công": 1.0,
+        "Trực": 0.0,
+        "Nghỉ bù": 0.0,
+        "Nghỉ phép": 0.0,
+        "Nghỉ ốm": 0.0,
+        "Không lương": 0.0,
+    },
+    {
+        "Ký hiệu": "Ô",
+        "Diễn giải": "½ ngày nghỉ ốm",
+        "Công": 0.0,
+        "Trực": 0.0,
+        "Nghỉ bù": 0.0,
+        "Nghỉ phép": 0.0,
+        "Nghỉ ốm": 0.5,
+        "Không lương": 0.0,
+    },
+    {
+        "Ký hiệu": "ÔÔ",
+        "Diễn giải": "1 ngày nghỉ ốm",
+        "Công": 0.0,
+        "Trực": 0.0,
+        "Nghỉ bù": 0.0,
+        "Nghỉ phép": 0.0,
+        "Nghỉ ốm": 1.0,
+        "Không lương": 0.0,
+    },
+    {
+        "Ký hiệu": "Co",
+        "Diễn giải": "½ ngày nghỉ con ốm",
+        "Công": 0.0,
+        "Trực": 0.0,
+        "Nghỉ bù": 0.0,
+        "Nghỉ phép": 0.0,
+        "Nghỉ ốm": 0.5,
+        "Không lương": 0.0,
+    },
+    {
+        "Ký hiệu": "CoCo",
+        "Diễn giải": "1 ngày nghỉ con ốm",
+        "Công": 0.0,
+        "Trực": 0.0,
+        "Nghỉ bù": 0.0,
+        "Nghỉ phép": 0.0,
+        "Nghỉ ốm": 1.0,
+        "Không lương": 0.0,
+    },
+    {
+        "Ký hiệu": "R",
+        "Diễn giải": "½ ngày nghỉ việc riêng hưởng nguyên lương",
+        "Công": 0.5,
+        "Trực": 0.0,
+        "Nghỉ bù": 0.0,
+        "Nghỉ phép": 0.0,
+        "Nghỉ ốm": 0.0,
+        "Không lương": 0.0,
+    },
+    {
+        "Ký hiệu": "RR",
+        "Diễn giải": "1 ngày nghỉ việc riêng hưởng nguyên lương",
+        "Công": 1.0,
+        "Trực": 0.0,
+        "Nghỉ bù": 0.0,
+        "Nghỉ phép": 0.0,
+        "Nghỉ ốm": 0.0,
+        "Không lương": 0.0,
+    },
+    {
+        "Ký hiệu": "Ko",
+        "Diễn giải": "1 ngày nghỉ không hưởng lương",
+        "Công": 0.0,
+        "Trực": 0.0,
+        "Nghỉ bù": 0.0,
+        "Nghỉ phép": 0.0,
+        "Nghỉ ốm": 0.0,
+        "Không lương": 1.0,
+    },
+    {
+        "Ký hiệu": "TS",
+        "Diễn giải": "1 ngày nghỉ thai sản",
+        "Công": 0.0,
+        "Trực": 0.0,
+        "Nghỉ bù": 0.0,
+        "Nghỉ phép": 0.0,
+        "Nghỉ ốm": 0.0,
+        "Không lương": 0.0,
+    },
+]
 
 DEFAULT_DON_VI = [
-    "Khoa Cấp cứu", "Khoa Khám bệnh", "Khoa Ngoại tổng hợp", "Khoa Dược", 
-    "Khoa Hồi sức tích cực", "Phòng Tổ chức Cán bộ", "Phòng Tài chính Kế toán", "Phòng Kế hoạch Tổng hợp"
+    "Khoa Cấp cứu",
+    "Khoa Khám bệnh",
+    "Khoa Ngoại tổng hợp",
+    "Khoa Dược",
+    "Khoa Hồi sức tích cực",
+    "Phòng Tổ chức Cán bộ",
+    "Phòng Tài chính Kế toán",
+    "Phòng Kế hoạch Tổng hợp",
 ]
 
 DEFAULT_CAN_BO = [
-    {"Mã NV": "NV001", "Họ và tên": "Nguyễn Văn An", "Chức vụ": "Bác sĩ CKI", "Đơn vị": "Khoa Cấp cứu"},
-    {"Mã NV": "NV002", "Họ và tên": "Trần Thị Bích", "Chức vụ": "Điều dưỡng trưởng", "Đơn vị": "Khoa Cấp cứu"},
-    {"Mã NV": "NV003", "Họ và tên": "Lê Hoàng Cường", "Chức vụ": "Bác sĩ chính", "Đơn vị": "Khoa Ngoại tổng hợp"},
-    {"Mã NV": "NV004", "Họ và tên": "Phạm Minh Đức", "Chức vụ": "Dược sĩ CKI", "Đơn vị": "Khoa Dược"},
-    {"Mã NV": "NV005", "Họ và tên": "Vũ Thị Dung", "Chức vụ": "Chuyên viên TCCB", "Đơn vị": "Phòng Tổ chức Cán bộ"},
+    {
+        "Mã NV": "NV001",
+        "Họ và tên": "Nguyễn Văn An",
+        "Chức vụ": "Bác sĩ CKI",
+        "Đơn vị": "Khoa Cấp cứu",
+    },
+    {
+        "Mã NV": "NV002",
+        "Họ và tên": "Trần Thị Bích",
+        "Chức vụ": "Điều dưỡng trưởng",
+        "Đơn vị": "Khoa Cấp cứu",
+    },
+    {
+        "Mã NV": "NV003",
+        "Họ và tên": "Lê Hoàng Cường",
+        "Chức vụ": "Bác sĩ chính",
+        "Đơn vị": "Khoa Ngoại tổng hợp",
+    },
+    {
+        "Mã NV": "NV004",
+        "Họ và tên": "Phạm Minh Đức",
+        "Chức vụ": "Dược sĩ CKI",
+        "Đơn vị": "Khoa Dược",
+    },
+    {
+        "Mã NV": "NV005",
+        "Họ và tên": "Vũ Thị Dung",
+        "Chức vụ": "Chuyên viên TCCB",
+        "Đơn vị": "Phòng Tổ chức Cán bộ",
+    },
 ]
 
+
 # ---------------------------------------------------------
-# 3. TẢI VÀ LƯU DỮ LIỆU CSDL
+# 3. LOAD / SAVE QUY ƯỚC KÝ HIỆU & HỒ SƠ CÁN BỘ
 # ---------------------------------------------------------
+def load_timekeeping_rules():
+    if not supabase:
+        return pd.DataFrame(DEFAULT_TIMEKEEPING_RULES)
+    try:
+        res = (
+            supabase.table("categories")
+            .select("content")
+            .eq("cat_key", "tk_rules")
+            .execute()
+        )
+        if res.data and res.data[0]["content"]:
+            return pd.DataFrame(res.data[0]["content"])
+        return pd.DataFrame(DEFAULT_TIMEKEEPING_RULES)
+    except Exception:
+        return pd.DataFrame(DEFAULT_TIMEKEEPING_RULES)
+
+
+def save_timekeeping_rules(df_rules):
+    if not supabase:
+        return True
+    try:
+        clean_df = df_rules.fillna("")
+        payload = {
+            "cat_key": "tk_rules",
+            "title": "Quy ước Ký hiệu Chấm công",
+            "content": clean_df.to_dict(orient="records"),
+        }
+        supabase.table("categories").upsert(payload).execute()
+        return True
+    except Exception as e:
+        st.error(f"Lỗi khi lưu quy ước: {e}")
+        return False
+
+
 def load_employees():
     if not supabase:
         return pd.DataFrame(DEFAULT_CAN_BO)
     try:
-        res = supabase.table("categories").select("content").eq("cat_key", "employees_profile").execute()
+        res = (
+            supabase.table("categories")
+            .select("content")
+            .eq("cat_key", "employees_profile")
+            .execute()
+        )
         if res.data and res.data[0]["content"]:
             df = pd.DataFrame(res.data[0]["content"])
             if "Mã CB" in df.columns and "Mã NV" not in df.columns:
                 df.rename(columns={"Mã CB": "Mã NV"}, inplace=True)
             if "Khoa / Phòng" in df.columns and "Đơn vị" not in df.columns:
                 df.rename(columns={"Khoa / Phòng": "Đơn vị"}, inplace=True)
-            if "Chức vụ / Chức danh" in df.columns and "Chức vụ" not in df.columns:
-                df.rename(columns={"Chức vụ / Chức danh": "Chức vụ"}, inplace=True)
+            if (
+                "Chức vụ / Chức danh" in df.columns
+                and "Chức vụ" not in df.columns
+            ):
+                df.rename(
+                    columns={"Chức vụ / Chức danh": "Chức vụ"}, inplace=True
+                )
             return df[["Mã NV", "Họ và tên", "Chức vụ", "Đơn vị"]]
         return pd.DataFrame(DEFAULT_CAN_BO)
     except Exception:
         return pd.DataFrame(DEFAULT_CAN_BO)
+
 
 def load_timekeeping_db(month, year):
     key_db = f"tk_{year}_{month:02d}"
     if not supabase:
         return st.session_state.get(key_db, pd.DataFrame())
     try:
-        res = supabase.table("categories").select("content").eq("cat_key", key_db).execute()
+        res = (
+            supabase.table("categories")
+            .select("content")
+            .eq("cat_key", key_db)
+            .execute()
+        )
         if res.data and res.data[0]["content"]:
             return pd.DataFrame(res.data[0]["content"])
         return pd.DataFrame()
     except Exception:
         return st.session_state.get(key_db, pd.DataFrame())
+
 
 def save_timekeeping_db(df, month, year):
     key_db = f"tk_{year}_{month:02d}"
@@ -108,7 +385,7 @@ def save_timekeeping_db(df, month, year):
         payload = {
             "cat_key": key_db,
             "title": f"Bảng chấm công Tháng {month}/{year}",
-            "content": clean_df.to_dict(orient="records")
+            "content": clean_df.to_dict(orient="records"),
         }
         supabase.table("categories").upsert(payload).execute()
         return True
@@ -116,54 +393,172 @@ def save_timekeeping_db(df, month, year):
         st.error(f"Lỗi lưu CSDL: {e}")
         return False
 
+
 # ---------------------------------------------------------
-# 4. TẠO FILE EXCEL MẪU CHẤM CÔNG THEO ĐƠN VỊ
+# 4. KHỞI TẠO FILE EXCEL MẪU 2 SHEETS THEO ĐÚNG YÊU CẦU
 # ---------------------------------------------------------
-def generate_timekeeping_template(df_emp_unit, month, year, unit_name):
+def generate_timekeeping_template(
+    df_emp_unit, month, year, unit_name, df_rules
+):
+    wb = openpyxl.Workbook()
+
+    # --- SHEET 1: BANG CHAM CONG ---
+    ws_main = wb.active
+    ws_main.title = f"ChamCong_T{month}_{year}"
+
+    # Tiêu đề in hoa chuẩn
+    unit_title = (
+        unit_name.upper()
+        if unit_name != "Tất cả đơn vị"
+        else "TOÀN BỆNH VIỆN"
+    )
+    title_text = (
+        f"BẢNG CHẤM CÔNG THÁNG {month}/{year} CỦA {unit_title}"
+    )
+
+    ws_main.merge_cells("A1:AJ1")
+    cell_title = ws_main["A1"]
+    cell_title.value = title_text
+    cell_title.font = Font(name="Arial", size=14, bold=True, color="003366")
+    cell_title.alignment = Alignment(horizontal="center", vertical="center")
+
+    # Dòng tiêu đề bảng
     num_days = calendar.monthrange(year, month)[1]
-    day_cols = [f"Ngày {d:02d}" for d in range(1, num_days + 1)]
-    
-    data = []
-    for _, row in df_emp_unit.iterrows():
-        r_dict = {
-            "Mã NV": row.get("Mã NV", ""),
-            "Họ và tên": row.get("Họ và tên", ""),
-            "Chức vụ": row.get("Chức vụ", ""),
-            "Đơn vị": unit_name
-        }
-        for d_col in day_cols:
-            r_dict[d_col] = "XX"  # Mặc định là làm việc hành chính
-        data.append(r_dict)
-        
-    df_template = pd.DataFrame(data)
-    
+    headers = ["STT", "Mã NV", "Họ và tên", "Chức vụ", "Đơn vị"] + [
+        f"Ngày {d:02d}" for d in range(1, num_days + 1)
+    ]
+
+    ws_main.append([])  # Dòng trống A2
+    ws_main.append(headers)  # Dòng D3
+
+    # Style Header
+    header_font = Font(name="Arial", size=10, bold=True, color="FFFFFF")
+    header_fill = PatternFill(
+        start_color="1F4E79", end_color="1F4E79", fill_type="solid"
+    )
+    thin_border = Border(
+        left=Side(style="thin", color="CCCCCC"),
+        right=Side(style="thin", color="CCCCCC"),
+        top=Side(style="thin", color="CCCCCC"),
+        bottom=Side(style="thin", color="CCCCCC"),
+    )
+
+    for col_idx in range(1, len(headers) + 1):
+        cell = ws_main.cell(row=3, column=col_idx)
+        cell.font = header_font
+        cell.fill = header_fill
+        cell.alignment = Alignment(horizontal="center", vertical="center")
+        cell.border = thin_border
+
+    # Điền danh sách nhân viên - TRỐNG BẢNG CHẤM CÔNG (Không điền sẵn XX)
+    for idx, (_, row) in enumerate(df_emp_unit.iterrows(), start=1):
+        row_data = [
+            idx,
+            row.get("Mã NV", ""),
+            row.get("Họ và tên", ""),
+            row.get("Chức vụ", ""),
+            row.get("Đơn vị", unit_name),
+        ] + [
+            "" for _ in range(num_days)
+        ]  # TRỐNG hoàn toàn ký hiệu chấm công
+        ws_main.append(row_data)
+
+    # Style các ô dữ liệu
+    for r in range(4, 4 + len(df_emp_unit)):
+        for c in range(1, len(headers) + 1):
+            cell = ws_main.cell(row=r, column=c)
+            cell.border = thin_border
+            cell.font = Font(name="Arial", size=10)
+            if c <= 5:
+                cell.alignment = Alignment(
+                    horizontal="left" if c in [3, 4, 5] else "center",
+                    vertical="center",
+                )
+            else:
+                cell.alignment = Alignment(
+                    horizontal="center", vertical="center"
+                )
+
+    # Set độ rộng cột
+    ws_main.column_dimensions["A"].width = 6
+    ws_main.column_dimensions["B"].width = 12
+    ws_main.column_dimensions["C"].width = 25
+    ws_main.column_dimensions["D"].width = 20
+    ws_main.column_dimensions["E"].width = 22
+    for col_idx in range(6, len(headers) + 1):
+        col_letter = openpyxl.utils.get_column_letter(col_idx)
+        ws_main.column_dimensions[col_letter].width = 9
+
+    # --- SHEET 2: QUY UOC KY HIEU CHAM CONG ---
+    ws_rules = wb.create_sheet(title="QuyUocKyHieu")
+
+    ws_rules["A1"] = "BẢNG QUY ƯỚC KÝ HIỆU CHẤM CÔNG CHUẨN BỘ Y TẾ & BỘ NỘI VỤ"
+    ws_rules["A1"].font = Font(name="Arial", size=12, bold=True, color="003366")
+
+    rule_headers = ["STT", "Ký hiệu", "Tên ký hiệu / Diễn giải"]
+    ws_rules.append([])
+    ws_rules.append(rule_headers)
+
+    for col_idx in range(1, len(rule_headers) + 1):
+        cell = ws_rules.cell(row=3, column=col_idx)
+        cell.font = header_font
+        cell.fill = PatternFill(
+            start_color="2F5597", end_color="2F5597", fill_type="solid"
+        )
+        cell.alignment = Alignment(horizontal="center", vertical="center")
+        cell.border = thin_border
+
+    for idx, (_, r_row) in enumerate(df_rules.iterrows(), start=1):
+        ws_rules.append([idx, r_row.get("Ký hiệu", ""), r_row.get("Diễn giải", "")])
+
+    for r in range(4, 4 + len(df_rules)):
+        for c in range(1, 4):
+            cell = ws_rules.cell(row=r, column=c)
+            cell.border = thin_border
+            cell.font = Font(name="Arial", size=10)
+            cell.alignment = Alignment(
+                horizontal="center" if c in [1, 2] else "left",
+                vertical="center",
+            )
+
+    ws_rules.column_dimensions["A"].width = 8
+    ws_rules.column_dimensions["B"].width = 15
+    ws_rules.column_dimensions["C"].width = 50
+
     output = io.BytesIO()
-    with pd.ExcelWriter(output, engine="openpyxl") as writer:
-        df_template.to_excel(writer, index=False, sheet_name=f"Thang_{month}_{year}")
+    wb.save(output)
     output.seek(0)
     return output
 
+
 # ---------------------------------------------------------
-# 5. TÍNH TOÁN VÀ TỔNG HỢP CHẤM CÔNG
+# 5. TÍNH TOÁN VÀ TỔNG HỢP CHẤM CÔNG DỰA TRÊN QUY ƯỚC
 # ---------------------------------------------------------
-def parse_and_summarize(df_tk):
+def parse_and_summarize(df_tk, df_rules):
     if df_tk.empty:
         return pd.DataFrame()
-        
+
+    rules_dict = {}
+    for _, r in df_rules.iterrows():
+        k = str(r.get("Ký hiệu", "")).strip().upper()
+        rules_dict[k] = {
+            "cong": float(r.get("Công", 0.0) or 0.0),
+            "truc": float(r.get("Trực", 0.0) or 0.0),
+            "b": float(r.get("Nghỉ bù", 0.0) or 0.0),
+            "p": float(r.get("Nghỉ phép", 0.0) or 0.0),
+            "o": float(r.get("Nghỉ ốm", 0.0) or 0.0),
+            "khl": float(r.get("Không lương", 0.0) or 0.0),
+        }
+
     day_cols = [c for c in df_tk.columns if str(c).startswith("Ngày ")]
-    
+
     summary_list = []
     for idx, row in df_tk.iterrows():
-        c_cong = 0.0
-        c_truc = 0.0
-        c_b = 0.0
-        c_p = 0.0
-        c_o = 0.0
-        c_khl = 0.0
-        
+        c_cong, c_truc, c_b, c_p, c_o, c_khl = 0.0, 0.0, 0.0, 0.0, 0.0, 0.0
+
         for d in day_cols:
             val = str(row.get(d, "")).strip().upper()
-            rule = TIMEKEEPING_RULES.get(val, None)
+            rule = rules_dict.get(val, None)
             if rule:
                 c_cong += rule["cong"]
                 c_truc += rule["truc"]
@@ -171,9 +566,7 @@ def parse_and_summarize(df_tk):
                 c_p += rule["p"]
                 c_o += rule["o"]
                 c_khl += rule["khl"]
-            elif val in ["XX", "X"]:
-                c_cong += 1.0 if val == "XX" else 0.5
-                
+
         rec = row.to_dict()
         rec["Tổng ngày công"] = c_cong
         rec["Số ca trực"] = c_truc
@@ -182,59 +575,132 @@ def parse_and_summarize(df_tk):
         rec["Nghỉ ốm/con ốm"] = c_o
         rec["Nghỉ không lương"] = c_khl
         summary_list.append(rec)
-        
+
     return pd.DataFrame(summary_list)
 
+
 # ---------------------------------------------------------
-# 6. GIAO DIỆN CHÍNH MÔ ĐUN
+# 6. GIAO DIỆN CHÍNH MÔ ĐUN CHẤM CÔNG
 # ---------------------------------------------------------
 def render_timekeeping_management():
     st.subheader("⏰ Quản lý Chấm công - Ca trực - Phân lịch")
+
+    # Load quy ước ký hiệu
+    if "df_tk_rules" not in st.session_state:
+        st.session_state["df_tk_rules"] = load_timekeeping_rules()
+
+    df_rules = st.session_state["df_tk_rules"]
 
     tab1, tab2, tab3, tab4 = st.tabs([
         "📥 1. Tải Mẫu Chấm công",
         "📤 2. Upload Bảng Chấm công",
         "📊 3. Xem & Sửa Bảng Chấm công",
-        "📈 4. Báo cáo Tổng hợp (Tháng/Quý/Năm)"
+        "📈 4. Báo cáo Tổng hợp (Tháng/Quý/Năm)",
     ])
 
     df_emp_all = load_employees()
-    unit_list = list(df_emp_all["Đơn vị"].unique()) if not df_emp_all.empty else DEFAULT_DON_VI
+    unit_list = (
+        list(df_emp_all["Đơn vị"].unique())
+        if not df_emp_all.empty
+        else DEFAULT_DON_VI
+    )
 
     # -----------------------------------------------------
-    # TAB 1: TẢI FILE EXCEL MẪU
+    # TAB 1: TẢI FILE EXCEL MẪU VÀ CẤU HÌNH QUY ƯỚC KÝ HIỆU
     # -----------------------------------------------------
     with tab1:
-        st.markdown("##### 📥 Xuất mẫu Excel chấm công theo từng Khoa/Phòng/Trung tâm")
+        st.markdown(
+            "##### 📥 Xuất mẫu Excel chấm công theo từng Khoa/Phòng/Trung"
+            " tâm"
+        )
         c1, c2, c3 = st.columns(3)
         with c1:
-            sel_unit = st.selectbox("Chọn Đơn vị / Khoa / Phòng:", options=["Tất cả đơn vị"] + unit_list, key="tk_sel_unit_dl")
+            sel_unit = st.selectbox(
+                "Chọn Đơn vị / Khoa / Phòng:",
+                options=["Tất cả đơn vị"] + unit_list,
+                key="tk_sel_unit_dl",
+            )
         with c2:
-            sel_month = st.selectbox("Chọn Tháng:", range(1, 13), index=date.today().month - 1, key="tk_sel_m_dl")
+            sel_month = st.selectbox(
+                "Chọn Tháng:",
+                range(1, 13),
+                index=date.today().month - 1,
+                key="tk_sel_m_dl",
+            )
         with c3:
-            sel_year = st.number_input("Chọn Năm:", min_value=2020, max_value=2030, value=date.today().year, key="tk_sel_y_dl")
+            sel_year = st.number_input(
+                "Chọn Năm:",
+                min_value=2020,
+                max_value=2030,
+                value=date.today().year,
+                key="tk_sel_y_dl",
+            )
 
         if sel_unit == "Tất cả đơn vị":
             df_target = df_emp_all
         else:
             df_target = df_emp_all[df_emp_all["Đơn vị"] == sel_unit]
 
-        st.info(f"📋 Tìm thấy **{len(df_target)}** nhân viên thuộc danh sách xuất file mẫu.")
-        
-        excel_file = generate_timekeeping_template(df_target, sel_month, sel_year, sel_unit)
-        st.download_button(
-            label=f"📥 Tải File Excel Mẫu Chấm Công Tháng {sel_month}/{sel_year}",
-            data=excel_file,
-            file_name=f"Mau_Cham_Cong_{sel_unit.replace(' ', '_')}_T{sel_month}_{sel_year}.xlsx",
-            mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
-            type="primary"
+        st.info(
+            f"📋 Tìm thấy **{len(df_target)}** nhân viên thuộc danh sách xuất"
+            " file mẫu."
         )
 
-        with st.expander("📖 Xem Quy ước Ký hiệu Chấm công chuẩn Bộ Y tế & Bộ Nội vụ", expanded=False):
-            rules_df = pd.DataFrame([
-                {"Ký hiệu": k, "Tên ký hiệu / Diễn giải": v["desc"]} for k, v in TIMEKEEPING_RULES.items() if not k.endswith("O")
-            ])
-            st.dataframe(rules_df, use_container_width=True, hide_index=True)
+        excel_file = generate_timekeeping_template(
+            df_target, sel_month, sel_year, sel_unit, df_rules
+        )
+        st.download_button(
+            label=(
+                f"📥 Tải File Excel Mẫu Chấm Công Tháng {sel_month}/{sel_year}"
+            ),
+            data=excel_file,
+            file_name=(
+                f"Mau_Cham_Cong_{sel_unit.replace(' ', '_')}_T{sel_month}_{sel_year}.xlsx"
+            ),
+            mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+            type="primary",
+        )
+
+        st.markdown("---")
+
+        # --- EXPANDER: QUẢN LÝ THÊM / SỬA / XÓA / LƯU KÝ HIỆU CHẤM CÔNG ---
+        with st.expander(
+            "⚙️ BẢNG QUY ƯỚC KÝ HIỆU CHẤM CÔNG (THÊM / SỬA / XÓA / LƯU)",
+            expanded=True,
+        ):
+            st.markdown(
+                "Chỉnh sửa trực tiếp quy ước quy đổi công, trực, nghỉ phép..."
+                " bên dưới:"
+            )
+
+            edited_rules = st.data_editor(
+                df_rules,
+                use_container_width=True,
+                num_rows="dynamic",
+                key="editor_tk_rules",
+            )
+
+            col_r_save, col_r_reload = st.columns([3, 1])
+            with col_r_save:
+                if st.button(
+                    "💾 Lưu Bảng Quy ước Ký hiệu vĩnh viễn",
+                    type="primary",
+                    key="btn_save_tk_rules",
+                ):
+                    st.session_state["df_tk_rules"] = edited_rules
+                    if save_timekeeping_rules(edited_rules):
+                        st.success(
+                            "✅ Đã lưu Quy ước ký hiệu chấm công vào CSDL"
+                            " Supabase!"
+                        )
+                        st.rerun()
+
+            with col_r_reload:
+                if st.button(
+                    "🔄 Khôi phục mặc định", key="btn_reload_tk_rules"
+                ):
+                    st.session_state["df_tk_rules"] = load_timekeeping_rules()
+                    st.rerun()
 
     # -----------------------------------------------------
     # TAB 2: UPLOAD BẢNG CHẤM CÔNG
@@ -243,27 +709,54 @@ def render_timekeeping_management():
         st.markdown("##### 📤 Tải lên file Excel Bảng chấm công đã khai báo")
         up_c1, up_c2 = st.columns(2)
         with up_c1:
-            up_m = st.selectbox("Chấm công cho Tháng:", range(1, 13), index=date.today().month - 1, key="up_m")
+            up_m = st.selectbox(
+                "Chấm công cho Tháng:",
+                range(1, 13),
+                index=date.today().month - 1,
+                key="up_m",
+            )
         with up_c2:
-            up_y = st.number_input("Năm:", min_value=2020, max_value=2030, value=date.today().year, key="up_y")
+            up_y = st.number_input(
+                "Năm:",
+                min_value=2020,
+                max_value=2030,
+                value=date.today().year,
+                key="up_y",
+            )
 
-        uploaded_tk_file = st.file_uploader("Chọn file Excel chấm công (.xlsx, .xls):", type=["xlsx", "xls"], key="up_tk_file")
+        uploaded_tk_file = st.file_uploader(
+            "Chọn file Excel chấm công (.xlsx, .xls):",
+            type=["xlsx", "xls"],
+            key="up_tk_file",
+        )
 
         if uploaded_tk_file:
             try:
-                df_up = pd.read_excel(uploaded_tk_file).fillna("")
-                st.write("📌 **Dữ liệu đọc từ file mẫu:**")
+                # Đọc bỏ qua dòng tiêu đề nếu cần
+                df_up = pd.read_excel(uploaded_tk_file, skiprows=2).fillna("")
+                # Xóa cột STT thừa nếu có
+                if "STT" in df_up.columns:
+                    df_up.drop(columns=["STT"], inplace=True)
+
+                st.write("📌 **Dữ liệu đọc từ file chấm công:**")
                 st.dataframe(df_up.head(10), use_container_width=True)
 
-                if st.button("💾 Cập nhật dữ liệu vào Hệ thống CSDL", type="primary"):
+                if st.button(
+                    "💾 Cập nhật dữ liệu vào Hệ thống CSDL", type="primary"
+                ):
                     existing_df = load_timekeeping_db(up_m, up_y)
                     if not existing_df.empty and "Mã NV" in existing_df.columns:
-                        combined_df = pd.concat([existing_df, df_up], ignore_index=True).drop_duplicates(subset=["Mã NV"], keep="last")
+                        combined_df = pd.concat(
+                            [existing_df, df_up], ignore_index=True
+                        ).drop_duplicates(subset=["Mã NV"], keep="last")
                     else:
                         combined_df = df_up
 
                     if save_timekeeping_db(combined_df, up_m, up_y):
-                        st.success(f"✅ Đã lưu dữ liệu chấm công Tháng {up_m}/{up_y} thành công!")
+                        st.success(
+                            f"✅ Đã lưu dữ liệu chấm công Tháng {up_m}/{up_y}"
+                            " thành công!"
+                        )
                         st.rerun()
             except Exception as e:
                 st.error(f"Lỗi xử lý file Excel: {e}")
@@ -274,11 +767,26 @@ def render_timekeeping_management():
     with tab3:
         v_c1, v_c2, v_c3 = st.columns(3)
         with v_c1:
-            view_m = st.selectbox("Chọn Tháng xem:", range(1, 13), index=date.today().month - 1, key="view_m")
+            view_m = st.selectbox(
+                "Chọn Tháng xem:",
+                range(1, 13),
+                index=date.today().month - 1,
+                key="view_m",
+            )
         with v_c2:
-            view_y = st.number_input("Chọn Năm xem:", min_value=2020, max_value=2030, value=date.today().year, key="view_y")
+            view_y = st.number_input(
+                "Chọn Năm xem:",
+                min_value=2020,
+                max_value=2030,
+                value=date.today().year,
+                key="view_y",
+            )
         with v_c3:
-            filter_unit = st.selectbox("Lọc theo Đơn vị:", ["Tất cả đơn vị"] + unit_list, key="view_unit")
+            filter_unit = st.selectbox(
+                "Lọc theo Đơn vị:",
+                ["Tất cả đơn vị"] + unit_list,
+                key="view_unit",
+            )
 
         df_view = load_timekeeping_db(view_m, view_y)
 
@@ -288,30 +796,50 @@ def render_timekeeping_management():
             else:
                 df_view_filtered = df_view
 
-            df_calculated = parse_and_summarize(df_view_filtered)
+            df_calculated = parse_and_summarize(df_view_filtered, df_rules)
 
-            st.markdown(f"##### 📋 Bảng Chi tiết Chấm công Tháng {view_m}/{view_y}")
+            st.markdown(
+                f"##### 📋 Bảng Chi tiết Chấm công Tháng {view_m}/{view_y}"
+            )
             edited_tk = st.data_editor(
                 df_calculated,
                 use_container_width=True,
                 hide_index=True,
-                key=f"editor_tk_{view_m}_{view_y}"
+                key=f"editor_tk_{view_m}_{view_y}",
             )
 
-            if st.button("💾 Lưu chỉnh sửa Bảng Chấm công", type="primary", key="btn_save_tk_edit"):
+            if st.button(
+                "💾 Lưu chỉnh sửa Bảng Chấm công",
+                type="primary",
+                key="btn_save_tk_edit",
+            ):
                 if save_timekeeping_db(edited_tk, view_m, view_y):
                     st.success("✅ Đã cập nhật thành công CSDL Chấm công!")
                     st.rerun()
         else:
-            st.warning(f"Chưa có dữ liệu chấm công cho Tháng {view_m}/{view_y}. Vui lòng upload file Excel ở Tab 2.")
+            st.warning(
+                f"Chưa có dữ liệu chấm công cho Tháng {view_m}/{view_y}. Vui"
+                " lòng upload file Excel ở Tab 2."
+            )
 
     # -----------------------------------------------------
     # TAB 4: BÁO CÁO TỔNG HỢP TÙY CHỌN
-    # ---------------------------------------------------------
+    # -----------------------------------------------------
     with tab4:
-        st.markdown("##### 📈 Báo cáo Tổng hợp Chấm công - Trực - Nghỉ bù / Phép")
-        
-        rep_type = st.radio("Chọn loại báo cáo tổng hợp:", ["Theo Tháng", "Theo Quý", "Theo Năm", "Khoảng thời gian tùy chọn"], horizontal=True)
+        st.markdown(
+            "##### 📈 Báo cáo Tổng hợp Chấm công - Trực - Nghỉ bù / Phép"
+        )
+
+        rep_type = st.radio(
+            "Chọn loại báo cáo tổng hợp:",
+            [
+                "Theo Tháng",
+                "Theo Quý",
+                "Theo Năm",
+                "Khoảng thời gian tùy chọn",
+            ],
+            horizontal=True,
+        )
 
         selected_months = []
         rep_year = date.today().year
@@ -319,25 +847,60 @@ def render_timekeeping_management():
         if rep_type == "Theo Tháng":
             rc1, rc2 = st.columns(2)
             with rc1:
-                rm = st.selectbox("Chọn Tháng báo cáo:", range(1, 13), index=date.today().month - 1, key="rm_single")
+                rm = st.selectbox(
+                    "Chọn Tháng báo cáo:",
+                    range(1, 13),
+                    index=date.today().month - 1,
+                    key="rm_single",
+                )
             with rc2:
-                rep_year = st.number_input("Chọn Năm:", min_value=2020, max_value=2030, value=date.today().year, key="ry_single")
+                rep_year = st.number_input(
+                    "Chọn Năm:",
+                    min_value=2020,
+                    max_value=2030,
+                    value=date.today().year,
+                    key="ry_single",
+                )
             selected_months = [rm]
 
         elif rep_type == "Theo Quý":
             rc1, rc2 = st.columns(2)
             with rc1:
-                r_q = st.selectbox("Chọn Quý:", ["Quý I (Tháng 1-3)", "Quý II (Tháng 4-6)", "Quý III (Tháng 7-9)", "Quý IV (Tháng 10-12)"])
+                r_q = st.selectbox(
+                    "Chọn Quý:",
+                    [
+                        "Quý I (Tháng 1-3)",
+                        "Quý II (Tháng 4-6)",
+                        "Quý III (Tháng 7-9)",
+                        "Quý IV (Tháng 10-12)",
+                    ],
+                )
             with rc2:
-                rep_year = st.number_input("Chọn Năm:", min_value=2020, max_value=2030, value=date.today().year, key="ry_q")
-            
-            if "Quý I" in r_q: selected_months = [1, 2, 3]
-            elif "Quý II" in r_q: selected_months = [4, 5, 6]
-            elif "Quý III" in r_q: selected_months = [7, 8, 9]
-            else: selected_months = [10, 11, 12]
+                rep_year = st.number_input(
+                    "Chọn Năm:",
+                    min_value=2020,
+                    max_value=2030,
+                    value=date.today().year,
+                    key="ry_q",
+                )
+
+            if "Quý I" in r_q:
+                selected_months = [1, 2, 3]
+            elif "Quý II" in r_q:
+                selected_months = [4, 5, 6]
+            elif "Quý III" in r_q:
+                selected_months = [7, 8, 9]
+            else:
+                selected_months = [10, 11, 12]
 
         elif rep_type == "Theo Năm":
-            rep_year = st.number_input("Chọn Năm Báo cáo:", min_value=2020, max_value=2030, value=date.today().year, key="ry_year")
+            rep_year = st.number_input(
+                "Chọn Năm Báo cáo:",
+                min_value=2020,
+                max_value=2030,
+                value=date.today().year,
+                key="ry_year",
+            )
             selected_months = list(range(1, 13))
 
         else:
@@ -345,8 +908,16 @@ def render_timekeeping_management():
             with rc1:
                 m_start = st.selectbox("Từ Tháng:", range(1, 13), index=0)
             with rc2:
-                m_end = st.selectbox("Đến Tháng:", range(1, 13), index=date.today().month - 1)
-            rep_year = st.number_input("Năm:", min_value=2020, max_value=2030, value=date.today().year, key="ry_range")
+                m_end = st.selectbox(
+                    "Đến Tháng:", range(1, 13), index=date.today().month - 1
+                )
+            rep_year = st.number_input(
+                "Năm:",
+                min_value=2020,
+                max_value=2030,
+                value=date.today().year,
+                key="ry_range",
+            )
             selected_months = list(range(m_start, m_end + 1))
 
         # Tổng hợp dữ liệu các tháng đã chọn
@@ -354,41 +925,59 @@ def render_timekeeping_management():
         for m in selected_months:
             df_m = load_timekeeping_db(m, rep_year)
             if not df_m.empty:
-                df_parsed = parse_and_summarize(df_m)
+                df_parsed = parse_and_summarize(df_m, df_rules)
                 all_dfs.append(df_parsed)
 
         if all_dfs:
             combined_rep = pd.concat(all_dfs, ignore_index=True)
-            
-            # Groupby theo Mã NV và Họ tên
+
             group_cols = ["Mã NV", "Họ và tên", "Chức vụ", "Đơn vị"]
-            sum_cols = ["Tổng ngày công", "Số ca trực", "Nghỉ bù trực", "Nghỉ phép", "Nghỉ ốm/con ốm", "Nghỉ không lương"]
-            
-            # Đảm bảo các cột số tồn tại
+            sum_cols = [
+                "Tổng ngày công",
+                "Số ca trực",
+                "Nghỉ bù trực",
+                "Nghỉ phép",
+                "Nghỉ ốm/con ốm",
+                "Nghỉ không lương",
+            ]
+
             for sc in sum_cols:
                 if sc not in combined_rep.columns:
                     combined_rep[sc] = 0.0
 
-            final_report = combined_rep.groupby(group_cols)[sum_cols].sum().reset_index()
+            final_report = (
+                combined_rep.groupby(group_cols)[sum_cols].sum().reset_index()
+            )
 
-            st.write(f"📊 **BẢO CÁO TỔNG HỢP CÔNG - TRỰC - NGHỈ ({rep_type.upper()} NĂM {rep_year})**")
-            st.dataframe(final_report, use_container_width=True, hide_index=True)
+            st.write(
+                "📊 **BẢO CÁO TỔNG HỢP CÔNG - TRỰC - NGHỈ"
+                f" ({rep_type.upper()} NĂM {rep_year})**"
+            )
+            st.dataframe(
+                final_report, use_container_width=True, hide_index=True
+            )
 
-            # Xuất Excel báo cáo tổng hợp
             out_rep = io.BytesIO()
             with pd.ExcelWriter(out_rep, engine="openpyxl") as writer:
-                final_report.to_excel(writer, index=False, sheet_name="BaoCaoTongHop")
+                final_report.to_excel(
+                    writer, index=False, sheet_name="BaoCaoTongHop"
+                )
             out_rep.seek(0)
 
             st.download_button(
                 label="📥 Tải xuống Báo cáo Tổng hợp Excel",
                 data=out_rep,
-                file_name=f"Bao_Cao_Tong_Hop_Cham_Cong_{rep_type}_{rep_year}.xlsx",
+                file_name=(
+                    f"Bao_Cao_Tong_Hop_Cham_Cong_{rep_type}_{rep_year}.xlsx"
+                ),
                 mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
-                type="primary"
+                type="primary",
             )
         else:
-            st.warning("Không tìm thấy dữ liệu chấm công trong khoảng thời gian đã chọn.")
+            st.warning(
+                "Không tìm thấy dữ liệu chấm công trong khoảng thời gian đã"
+                " chọn."
+            )
 
 
 if __name__ == "__main__":
