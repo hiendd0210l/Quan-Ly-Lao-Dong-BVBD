@@ -31,219 +31,39 @@ def init_supabase():
 supabase = init_supabase()
 
 # ---------------------------------------------------------
-# 2. QUY ƯỚC KÝ HIỆU CHẤM CÔNG MẶC ĐỊNH
+# 2. QUY ƯỚC KÝ HIỆU CHẤM CÔNG MẶC ĐỊNH (ĐƠN GIẢN HÓA)
 # ---------------------------------------------------------
 DEFAULT_TIMEKEEPING_RULES = [
-    {
-        "Ký hiệu": "X",
-        "Diễn giải": "½ ngày công làm việc giờ hành chính",
-        "Công": 0.5,
-        "Trực": 0.0,
-        "Nghỉ bù": 0.0,
-        "Nghỉ phép": 0.0,
-        "Nghỉ ốm": 0.0,
-        "Không lương": 0.0,
-    },
-    {
-        "Ký hiệu": "XX",
-        "Diễn giải": "1 ngày công làm việc giờ hành chính",
-        "Công": 1.0,
-        "Trực": 0.0,
-        "Nghỉ bù": 0.0,
-        "Nghỉ phép": 0.0,
-        "Nghỉ ốm": 0.0,
-        "Không lương": 0.0,
-    },
-    {
-        "Ký hiệu": "T",
-        "Diễn giải": "1 ngày trực ngoài giờ hành chính",
-        "Công": 0.0,
-        "Trực": 1.0,
-        "Nghỉ bù": 0.0,
-        "Nghỉ phép": 0.0,
-        "Nghỉ ốm": 0.0,
-        "Không lương": 0.0,
-    },
-    {
-        "Ký hiệu": "B",
-        "Diễn giải": "½ ngày nghỉ bù trực hưởng nguyên lương",
-        "Công": 0.0,
-        "Trực": 0.0,
-        "Nghỉ bù": 0.5,
-        "Nghỉ phép": 0.0,
-        "Nghỉ ốm": 0.0,
-        "Không lương": 0.0,
-    },
-    {
-        "Ký hiệu": "BB",
-        "Diễn giải": "1 ngày nghỉ bù trực hưởng nguyên lương",
-        "Công": 0.0,
-        "Trực": 0.0,
-        "Nghỉ bù": 1.0,
-        "Nghỉ phép": 0.0,
-        "Nghỉ ốm": 0.0,
-        "Không lương": 0.0,
-    },
+    {"Ký hiệu": "X", "Diễn giải": "½ ngày công làm việc giờ hành chính"},
+    {"Ký hiệu": "XX", "Diễn giải": "1 ngày công làm việc giờ hành chính"},
+    {"Ký hiệu": "T", "Diễn giải": "1 ngày trực ngoài giờ hành chính"},
+    {"Ký hiệu": "B", "Diễn giải": "½ ngày nghỉ bù trực hưởng nguyên lương"},
+    {"Ký hiệu": "BB", "Diễn giải": "1 ngày nghỉ bù trực hưởng nguyên lương"},
     {
         "Ký hiệu": "XTX",
         "Diễn giải": "1 ngày công hành chính + 1 ngày trực ngoài giờ",
-        "Công": 1.0,
-        "Trực": 1.0,
-        "Nghỉ bù": 0.0,
-        "Nghỉ phép": 0.0,
-        "Nghỉ ốm": 0.0,
-        "Không lương": 0.0,
     },
     {
         "Ký hiệu": "BTB",
         "Diễn giải": "1 ngày nghỉ bù trực + 1 ngày trực ngoài giờ",
-        "Công": 0.0,
-        "Trực": 1.0,
-        "Nghỉ bù": 1.0,
-        "Nghỉ phép": 0.0,
-        "Nghỉ ốm": 0.0,
-        "Không lương": 0.0,
     },
-    {
-        "Ký hiệu": "P",
-        "Diễn giải": "½ ngày nghỉ phép",
-        "Công": 0.0,
-        "Trực": 0.0,
-        "Nghỉ bù": 0.0,
-        "Nghỉ phép": 0.5,
-        "Nghỉ ốm": 0.0,
-        "Không lương": 0.0,
-    },
-    {
-        "Ký hiệu": "PP",
-        "Diễn giải": "1 ngày nghỉ phép",
-        "Công": 0.0,
-        "Trực": 0.0,
-        "Nghỉ bù": 0.0,
-        "Nghỉ phép": 1.0,
-        "Nghỉ ốm": 0.0,
-        "Không lương": 0.0,
-    },
-    {
-        "Ký hiệu": "H",
-        "Diễn giải": "½ ngày đi học",
-        "Công": 0.5,
-        "Trực": 0.0,
-        "Nghỉ bù": 0.0,
-        "Nghỉ phép": 0.0,
-        "Nghỉ ốm": 0.0,
-        "Không lương": 0.0,
-    },
-    {
-        "Ký hiệu": "HH",
-        "Diễn giải": "1 ngày đi học",
-        "Công": 1.0,
-        "Trực": 0.0,
-        "Nghỉ bù": 0.0,
-        "Nghỉ phép": 0.0,
-        "Nghỉ ốm": 0.0,
-        "Không lương": 0.0,
-    },
-    {
-        "Ký hiệu": "CT",
-        "Diễn giải": "½ ngày đi công tác",
-        "Công": 0.5,
-        "Trực": 0.0,
-        "Nghỉ bù": 0.0,
-        "Nghỉ phép": 0.0,
-        "Nghỉ ốm": 0.0,
-        "Không lương": 0.0,
-    },
-    {
-        "Ký hiệu": "CTCT",
-        "Diễn giải": "1 ngày đi công tác",
-        "Công": 1.0,
-        "Trực": 0.0,
-        "Nghỉ bù": 0.0,
-        "Nghỉ phép": 0.0,
-        "Nghỉ ốm": 0.0,
-        "Không lương": 0.0,
-    },
-    {
-        "Ký hiệu": "Ô",
-        "Diễn giải": "½ ngày nghỉ ốm",
-        "Công": 0.0,
-        "Trực": 0.0,
-        "Nghỉ bù": 0.0,
-        "Nghỉ phép": 0.0,
-        "Nghỉ ốm": 0.5,
-        "Không lương": 0.0,
-    },
-    {
-        "Ký hiệu": "ÔÔ",
-        "Diễn giải": "1 ngày nghỉ ốm",
-        "Công": 0.0,
-        "Trực": 0.0,
-        "Nghỉ bù": 0.0,
-        "Nghỉ phép": 0.0,
-        "Nghỉ ốm": 1.0,
-        "Không lương": 0.0,
-    },
-    {
-        "Ký hiệu": "Co",
-        "Diễn giải": "½ ngày nghỉ con ốm",
-        "Công": 0.0,
-        "Trực": 0.0,
-        "Nghỉ bù": 0.0,
-        "Nghỉ phép": 0.0,
-        "Nghỉ ốm": 0.5,
-        "Không lương": 0.0,
-    },
-    {
-        "Ký hiệu": "CoCo",
-        "Diễn giải": "1 ngày nghỉ con ốm",
-        "Công": 0.0,
-        "Trực": 0.0,
-        "Nghỉ bù": 0.0,
-        "Nghỉ phép": 0.0,
-        "Nghỉ ốm": 1.0,
-        "Không lương": 0.0,
-    },
+    {"Ký hiệu": "P", "Diễn giải": "½ ngày nghỉ phép"},
+    {"Ký hiệu": "PP", "Diễn giải": "1 ngày nghỉ phép"},
+    {"Ký hiệu": "H", "Diễn giải": "½ ngày đi học"},
+    {"Ký hiệu": "HH", "Diễn giải": "1 ngày đi học"},
+    {"Ký hiệu": "CT", "Diễn giải": "½ ngày đi công tác"},
+    {"Ký hiệu": "CTCT", "Diễn giải": "1 ngày đi công tác"},
+    {"Ký hiệu": "Ô", "Diễn giải": "½ ngày nghỉ ốm"},
+    {"Ký hiệu": "ÔÔ", "Diễn giải": "1 ngày nghỉ ốm"},
+    {"Ký hiệu": "Co", "Diễn giải": "½ ngày nghỉ con ốm"},
+    {"Ký hiệu": "CoCo", "Diễn giải": "1 ngày nghỉ con ốm"},
     {
         "Ký hiệu": "R",
         "Diễn giải": "½ ngày nghỉ việc riêng hưởng nguyên lương",
-        "Công": 0.5,
-        "Trực": 0.0,
-        "Nghỉ bù": 0.0,
-        "Nghỉ phép": 0.0,
-        "Nghỉ ốm": 0.0,
-        "Không lương": 0.0,
     },
-    {
-        "Ký hiệu": "RR",
-        "Diễn giải": "1 ngày nghỉ việc riêng hưởng nguyên lương",
-        "Công": 1.0,
-        "Trực": 0.0,
-        "Nghỉ bù": 0.0,
-        "Nghỉ phép": 0.0,
-        "Nghỉ ốm": 0.0,
-        "Không lương": 0.0,
-    },
-    {
-        "Ký hiệu": "Ko",
-        "Diễn giải": "1 ngày nghỉ không hưởng lương",
-        "Công": 0.0,
-        "Trực": 0.0,
-        "Nghỉ bù": 0.0,
-        "Nghỉ phép": 0.0,
-        "Nghỉ ốm": 0.0,
-        "Không lương": 1.0,
-    },
-    {
-        "Ký hiệu": "TS",
-        "Diễn giải": "1 ngày nghỉ thai sản",
-        "Công": 0.0,
-        "Trực": 0.0,
-        "Nghỉ bù": 0.0,
-        "Nghỉ phép": 0.0,
-        "Nghỉ ốm": 0.0,
-        "Không lương": 0.0,
-    },
+    {"Ký hiệu": "RR", "Diễn giải": "1 ngày nghỉ việc riêng hưởng nguyên lương"},
+    {"Ký hiệu": "Ko", "Diễn giải": "1 ngày nghỉ không hưởng lương"},
+    {"Ký hiệu": "TS", "Diễn giải": "1 ngày nghỉ thai sản"},
 ]
 
 DEFAULT_DON_VI = [
@@ -305,7 +125,8 @@ def load_timekeeping_rules():
             .execute()
         )
         if res.data and res.data[0]["content"]:
-            return pd.DataFrame(res.data[0]["content"])
+            df_res = pd.DataFrame(res.data[0]["content"])
+            return df_res[["Ký hiệu", "Diễn giải"]]
         return pd.DataFrame(DEFAULT_TIMEKEEPING_RULES)
     except Exception:
         return pd.DataFrame(DEFAULT_TIMEKEEPING_RULES)
@@ -315,7 +136,7 @@ def save_timekeeping_rules(df_rules):
     if not supabase:
         return True
     try:
-        clean_df = df_rules.fillna("")
+        clean_df = df_rules[["Ký hiệu", "Diễn giải"]].fillna("")
         payload = {
             "cat_key": "tk_rules",
             "title": "Quy ước Ký hiệu Chấm công",
@@ -455,7 +276,7 @@ def generate_timekeeping_template(
             row.get("Đơn vị", unit_name),
         ] + [
             "" for _ in range(num_days)
-        ]  # Để trống ô ngày
+        ]
         ws_main.append(row_data)
 
     for r in range(4, 4 + len(df_emp_unit)):
@@ -482,7 +303,7 @@ def generate_timekeeping_template(
         col_letter = openpyxl.utils.get_column_letter(col_idx)
         ws_main.column_dimensions[col_letter].width = 9
 
-    # Sheet 2: Quy ước ký hiệu kèm theo
+    # Sheet 2: Quy ước ký hiệu
     ws_rules = wb.create_sheet(title="QuyUocKyHieu")
     ws_rules["A1"] = "BẢNG QUY ƯỚC KÝ HIỆU CHẤM CÔNG CHUẨN BỘ Y TẾ & BỘ NỘI VỤ"
     ws_rules["A1"].font = Font(name="Arial", size=12, bold=True, color="003366")
@@ -524,23 +345,11 @@ def generate_timekeeping_template(
 
 
 # ---------------------------------------------------------
-# 5. TÍNH TOÁN DỮ LIỆU TỔNG HỢP
+# 5. TÍNH TOÁN DỮ LIỆU TỔNG HỢP (TỰ ĐỘNG ĐẾM CÁC MÃ KHAI BÁO)
 # ---------------------------------------------------------
-def parse_and_summarize(df_tk, df_rules):
+def parse_and_summarize(df_tk):
     if df_tk.empty:
         return pd.DataFrame()
-
-    rules_dict = {}
-    for _, r in df_rules.iterrows():
-        k = str(r.get("Ký hiệu", "")).strip().upper()
-        rules_dict[k] = {
-            "cong": float(r.get("Công", 0.0) or 0.0),
-            "truc": float(r.get("Trực", 0.0) or 0.0),
-            "b": float(r.get("Nghỉ bù", 0.0) or 0.0),
-            "p": float(r.get("Nghỉ phép", 0.0) or 0.0),
-            "o": float(r.get("Nghỉ ốm", 0.0) or 0.0),
-            "khl": float(r.get("Không lương", 0.0) or 0.0),
-        }
 
     day_cols = [c for c in df_tk.columns if str(c).startswith("Ngày ")]
 
@@ -550,14 +359,36 @@ def parse_and_summarize(df_tk, df_rules):
 
         for d in day_cols:
             val = str(row.get(d, "")).strip().upper()
-            rule = rules_dict.get(val, None)
-            if rule:
-                c_cong += rule["cong"]
-                c_truc += rule["truc"]
-                c_b += rule["b"]
-                c_p += rule["p"]
-                c_o += rule["o"]
-                c_khl += rule["khl"]
+            if val == "XX":
+                c_cong += 1.0
+            elif val == "X":
+                c_cong += 0.5
+            elif val == "T":
+                c_truc += 1.0
+            elif val == "BB":
+                c_b += 1.0
+            elif val == "B":
+                c_b += 0.5
+            elif val == "XTX":
+                c_cong += 1.0
+                c_truc += 1.0
+            elif val == "BTB":
+                c_b += 1.0
+                c_truc += 1.0
+            elif val == "PP":
+                c_p += 1.0
+            elif val == "P":
+                c_p += 0.5
+            elif val in ["ÔÔ", "OO", "COCO"]:
+                c_o += 1.0
+            elif val in ["Ô", "O", "CO"]:
+                c_o += 0.5
+            elif val in ["HH", "CTCT", "RR"]:
+                c_cong += 1.0
+            elif val in ["H", "CT", "R"]:
+                c_cong += 0.5
+            elif val == "KO":
+                c_khl += 1.0
 
         rec = row.to_dict()
         rec["Tổng ngày công"] = c_cong
@@ -577,7 +408,6 @@ def parse_and_summarize(df_tk, df_rules):
 def render_timekeeping_management():
     st.subheader("⏰ Quản lý Chấm công - Ca trực - Phân lịch")
 
-    # Nạp quy ước ký hiệu
     if "df_tk_rules" not in st.session_state:
         st.session_state["df_tk_rules"] = load_timekeeping_rules()
 
@@ -598,7 +428,7 @@ def render_timekeeping_management():
     )
 
     # -----------------------------------------------------
-    # TAB 1: TẢI FILE MẪU VÀ QUẢN LÝ THÊM / SỬA / XÓA / LƯU KÝ HIỆU
+    # TAB 1: TẢI FILE MẪU & THÊM / SỬA / XÓA KÝ HIỆU GỌN GÀNG
     # -----------------------------------------------------
     with tab1:
         st.markdown(
@@ -655,65 +485,40 @@ def render_timekeeping_management():
 
         st.markdown("---")
 
-        # --- KHU VỰC THÊM / SỬA / XÓA / LƯU KÝ HIỆU CHẤM CÔNG ---
+        # --- BẢNG QUY ƯỚC ĐÃ ĐƯỢC LƯỢC BỎ PHẦN QUY ĐỔI ---
         with st.expander(
             "⚙️ BẢNG QUY ƯỚC KÝ HIỆU CHẤM CÔNG CHUẨN BỘ Y TẾ & BỘ NỘI VỤ",
             expanded=True,
         ):
-            # BỘ CÔNG CỤ TƯƠNG TÁC: THÊM & XÓA KÝ HIỆU
-            c_add_rule, c_del_rule = st.columns(2)
+            c_add_rule, c_del_rule = st.columns([2, 1])
 
             with c_add_rule:
-                st.markdown("**➕ Thêm / Khai báo Ký hiệu Chấm công mới**")
-                with st.form(key="form_add_rule", clear_on_submit=True):
-                    f_kh = st.text_input(
-                        "Ký hiệu mới (*):", placeholder="Ví dụ: TC"
-                    )
-                    f_dg = st.text_input(
-                        "Tên ký hiệu / Diễn giải (*):",
-                        placeholder="Ví dụ: Tăng cường trực",
-                    )
-
-                    fc1, fc2, fc3 = st.columns(3)
-                    with fc1:
-                        f_cong = st.number_input(
-                            "Quy đổi Công:", min_value=0.0, max_value=2.0, step=0.5, value=1.0
+                st.markdown("**➕ Khai báo Ký hiệu Chấm công mới**")
+                with st.form(key="form_add_rule_simple", clear_on_submit=True):
+                    f1, f2 = st.columns([1, 2])
+                    with f1:
+                        f_kh = st.text_input(
+                            "Ký hiệu mới (*):", placeholder="Ví dụ: TC"
                         )
-                        f_truc = st.number_input(
-                            "Quy đổi Trực:", min_value=0.0, max_value=2.0, step=0.5, value=0.0
-                        )
-                    with fc2:
-                        f_b = st.number_input(
-                            "Nghỉ bù:", min_value=0.0, max_value=2.0, step=0.5, value=0.0
-                        )
-                        f_p = st.number_input(
-                            "Nghỉ phép:", min_value=0.0, max_value=2.0, step=0.5, value=0.0
-                        )
-                    with fc3:
-                        f_o = st.number_input(
-                            "Nghỉ ốm:", min_value=0.0, max_value=2.0, step=0.5, value=0.0
-                        )
-                        f_khl = st.number_input(
-                            "Không lương:", min_value=0.0, max_value=2.0, step=0.5, value=0.0
+                    with f2:
+                        f_dg = st.text_input(
+                            "Tên ký hiệu / Diễn giải (*):",
+                            placeholder="Ví dụ: Tăng cường trực",
                         )
 
-                    btn_add_r = st.form_submit_button("Thêm Ký hiệu vào Bảng")
+                    btn_add_r = st.form_submit_button(
+                        "Thêm Ký hiệu vào Danh sách"
+                    )
 
                     if btn_add_r:
                         if not f_kh or not f_dg:
                             st.error(
-                                "⚠️ Vui lòng điền Ký hiệu và Diễn giải!"
+                                "⚠️ Vui lòng nhập Ký hiệu và Diễn giải!"
                             )
                         else:
                             new_r = {
                                 "Ký hiệu": f_kh.upper(),
                                 "Diễn giải": f_dg,
-                                "Công": f_cong,
-                                "Trực": f_truc,
-                                "Nghỉ bù": f_b,
-                                "Nghỉ phép": f_p,
-                                "Nghỉ ốm": f_o,
-                                "Không lương": f_khl,
                             }
                             st.session_state["df_tk_rules"] = pd.concat(
                                 [
@@ -729,19 +534,19 @@ def render_timekeeping_management():
                             st.rerun()
 
             with c_del_rule:
-                st.markdown("**🗑️ Xóa Ký hiệu Chấm công**")
+                st.markdown("**🗑️ Xóa Ký hiệu**")
                 current_kh_list = list(
                     st.session_state["df_tk_rules"]["Ký hiệu"].unique()
                 )
                 selected_del_kh = st.multiselect(
-                    "Chọn danh sách Ký hiệu muốn xóa:",
+                    "Chọn ký hiệu cần xóa:",
                     options=current_kh_list,
-                    key="msel_del_rules",
+                    key="msel_del_rules_simple",
                 )
                 if st.button(
                     "❌ Xóa Ký hiệu đã chọn",
                     type="primary",
-                    key="btn_del_rules",
+                    key="btn_del_rules_simple",
                 ):
                     if selected_del_kh:
                         st.session_state["df_tk_rules"] = st.session_state[
@@ -754,23 +559,22 @@ def render_timekeeping_management():
                             drop=True
                         )
                         save_timekeeping_rules(st.session_state["df_tk_rules"])
-                        st.success("✅ Đã xóa thành công các ký hiệu đã chọn!")
+                        st.success("✅ Đã xóa ký hiệu thành công!")
                         st.rerun()
                     else:
-                        st.warning("Vui lòng chọn ít nhất 1 ký hiệu để xóa.")
+                        st.warning("Vui lòng chọn ký hiệu muốn xóa.")
 
             st.markdown("---")
             st.markdown(
-                "**✏️ Sửa trực tiếp quy ước và Nhấn nút 'Lưu Bảng Quy ước' để"
-                " cập nhật CSDL:**"
+                "**✏️ Danh sách Ký hiệu Chấm công (Sửa trực tiếp và nhấn Lưu"
+                " Bảng):**"
             )
 
-            # Bảng data_editor cho phép SỬA trực tiếp
             edited_rules = st.data_editor(
-                st.session_state["df_tk_rules"],
+                st.session_state["df_tk_rules"][["Ký hiệu", "Diễn giải"]],
                 use_container_width=True,
                 num_rows="dynamic",
-                key="editor_tk_rules",
+                key="editor_tk_rules_simple",
             )
 
             col_r_save, col_r_reload = st.columns([3, 1])
@@ -778,19 +582,16 @@ def render_timekeeping_management():
                 if st.button(
                     "💾 Lưu Bảng Quy ước Ký hiệu vĩnh viễn",
                     type="primary",
-                    key="btn_save_tk_rules",
+                    key="btn_save_tk_rules_simple",
                 ):
                     st.session_state["df_tk_rules"] = edited_rules
                     if save_timekeeping_rules(edited_rules):
-                        st.success(
-                            "✅ Đã lưu Bảng quy ước ký hiệu chấm công vào CSDL"
-                            " Supabase thành công!"
-                        )
+                        st.success("✅ Đã lưu Bảng Quy ước vào CSDL!")
                         st.rerun()
 
             with col_r_reload:
                 if st.button(
-                    "🔄 Khôi phục mặc định", key="btn_reload_tk_rules"
+                    "🔄 Khôi phục mặc định", key="btn_reload_tk_rules_simple"
                 ):
                     st.session_state["df_tk_rules"] = load_timekeeping_rules()
                     st.rerun()
@@ -887,7 +688,7 @@ def render_timekeeping_management():
             else:
                 df_view_filtered = df_view
 
-            df_calculated = parse_and_summarize(df_view_filtered, df_rules)
+            df_calculated = parse_and_summarize(df_view_filtered)
 
             st.markdown(
                 f"##### 📋 Bảng Chi tiết Chấm công Tháng {view_m}/{view_y}"
@@ -1015,7 +816,7 @@ def render_timekeeping_management():
         for m in selected_months:
             df_m = load_timekeeping_db(m, rep_year)
             if not df_m.empty:
-                df_parsed = parse_and_summarize(df_m, df_rules)
+                df_parsed = parse_and_summarize(df_m)
                 all_dfs.append(df_parsed)
 
         if all_dfs:
