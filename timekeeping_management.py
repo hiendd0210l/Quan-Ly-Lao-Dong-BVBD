@@ -217,7 +217,7 @@ def save_timekeeping_db(df, month, year):
 
 
 # ---------------------------------------------------------
-# 4. TẠO FILE EXCEL MẪU CÓ CHẶN LỖI CHÍNH XÁC (DATA VALIDATION STRICT)
+# 4. TẠO FILE EXCEL MẪU CÓ CHẶN HOÀN TOÀN + TỰ ĐỘNG IN HOA
 # ---------------------------------------------------------
 def generate_timekeeping_template(
     df_emp_unit, month, year, unit_name, df_rules
@@ -376,36 +376,43 @@ def generate_timekeeping_template(
             if day_fills.get(d_num):
                 cell.fill = day_fills[d_num]
 
-    # --- KHẮC PHỤC TRIỆT ĐỂ: CẢNH BÁO TỨC THỜI CHẶN NGHIÊM NGẶT ---
-    # Truyền trực tiếp danh sách ký hiệu hợp lệ dạng chuỗi cách nhau bởi dấu phẩy
-    if valid_symbols:
-        formula_str = f'"{",".join(valid_symbols)}"'
-    else:
-        formula_str = '"X,XX,T,B,BB,XTX,BTB,P,PP,H,HH,CT,CTCT,Ô,ÔÔ,Co,CoCo,R,RR,Ko,TS"'
+    # --- TẠO DANH SÁCH CHẤP NHẬN CẢ HOA VÀ THƯỜNG TRONG DATA VALIDATION ---
+    combined_symbols = []
+    for s in valid_symbols:
+        s_upper = s.upper()
+        s_lower = s.lower()
+        if s_upper not in combined_symbols:
+            combined_symbols.append(s_upper)
+        if s_lower not in combined_symbols:
+            combined_symbols.append(s_lower)
+
+    formula_str = f'"{",".join(combined_symbols)}"'
 
     dv = DataValidation(
         type="list",
         formula1=formula_str,
         allow_blank=True,
         showDropDown=True,
-        errorStyle="stop",  # BẮT BUỘC BẬT KHÓA CHẶN KHÔNG CHO LƯU
+        errorStyle="stop",
         showErrorMessage=True,
         showInputMessage=True,
     )
 
     dv.errorTitle = "❌ KÝ HIỆU KHÔNG HỢP LỆ"
     dv.error = (
-        "Ký hiệu nhập vào KHÔNG CÓ trong bảng quy ước!\nVui lòng chọn hoặc"
+        "Ký hiệu nhập vào KHÔNG CÓ trong Bảng quy ước!\nVui lòng chọn hoặc"
         " nhập lại đúng ký hiệu chuẩn."
     )
     dv.promptTitle = "💡 LƯU Ý CHẤM CÔNG"
-    dv.prompt = "Chỉ nhập các ký hiệu chấm công có trong danh sách quy ước."
+    dv.prompt = (
+        "Bạn có thể nhập chữ HOA hoặc chữ thường (Hệ thống sẽ tự động chuyển"
+        " thành chữ IN HOA)."
+    )
 
     ws_main.add_data_validation(dv)
 
-    # Áp dụng cho toàn bộ các dòng nhân viên x các cột ngày
     first_data_row = 5
-    last_data_row = 4 + (num_emp if num_emp > 0 else 50)  # Mở rộng dải ô chặn
+    last_data_row = 4 + (num_emp if num_emp > 0 else 50)
     first_day_col = openpyxl.utils.get_column_letter(5)
     last_day_col = openpyxl.utils.get_column_letter(4 + num_days)
 
@@ -478,7 +485,7 @@ def generate_timekeeping_template(
 
 
 # ---------------------------------------------------------
-# 5. TÍNH TOÁN DỮ LIỆU TỔNG HỢP
+# 5. TÍNH TOÁN DỮ LIỆU TỔNG HỢP (TỰ ĐỘNG CHUYỂN IN HOA KHI ĐỌC VÀ LƯU CSDL)
 # ---------------------------------------------------------
 def parse_and_summarize(df_tk):
     if df_tk.empty:
@@ -624,7 +631,7 @@ def render_timekeeping_management():
 
         # --- BẢNG QUY ƯỚC CHẤM CÔNG ---
         with st.expander(
-            "⚙️️ BẢNG QUY ƯỚC KÝ HIỆU CHẤM CÔNG CHUẨN BỘ Y TẾ & BỘ NỘI VỤ",
+            "⚙️ BẢNG QUY ƯỚC KÝ HIỆU CHẤM CÔNG CHUẨN BỘ Y TẾ & BỘ NỘI VỤ",
             expanded=True,
         ):
             c_add_rule, c_del_rule = st.columns([2, 1])
@@ -734,7 +741,7 @@ def render_timekeeping_management():
                     st.rerun()
 
     # -----------------------------------------------------
-    # TAB 2: UPLOAD BẢNG CHẤM CÔNG
+    # TAB 2: UPLOAD BẢNG CHẤM CÔNG (TỰ ĐỘNG CHUYỂN IN HOA TOÀN BỘ Ô CÔNG)
     # -----------------------------------------------------
     with tab2:
         st.markdown("##### 📤 Tải lên file Excel Bảng chấm công đã khai báo")
@@ -767,7 +774,19 @@ def render_timekeeping_management():
                 if "STT" in df_up.columns:
                     df_up.drop(columns=["STT"], inplace=True)
 
-                st.write("📌 **Dữ liệu đọc từ file chấm công:**")
+                # TỰ ĐỘNG CHUYỂN THÀNH IN HOA TRƯỚC KHI LƯU VÀO CSDL
+                day_cols = [
+                    c
+                    for c in df_up.columns
+                    if str(c).startswith("Ngày ") or "/" in str(c)
+                ]
+                for d in day_cols:
+                    df_up[d] = df_up[d].astype(str).str.upper()
+
+                st.write(
+                    "📌 **Dữ liệu đọc từ file chấm công (Đã tự động chuyển thành"
+                    " IN HOA):**"
+                )
                 st.dataframe(df_up.head(10), use_container_width=True)
 
                 if st.button(
