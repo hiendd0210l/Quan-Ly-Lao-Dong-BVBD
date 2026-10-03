@@ -209,7 +209,7 @@ def save_timekeeping_db(df, month, year):
 
 
 # ---------------------------------------------------------
-# 4. TẠO FILE EXCEL MẪU (SỬ DỤNG LIST VALIDATION CHUẨN ĐỂ TỰ ĐỘNG IN HOA KHI NHẬP)
+# 4. TẠO FILE EXCEL MẪU (SỬ DỤNG CUSTOM VALIDATION CHO PHÉP GHÉP TỰ DO & CHẶN "TT")
 # ---------------------------------------------------------
 def generate_timekeeping_template(
     df_emp_unit, month, year, unit_name, df_rules
@@ -246,35 +246,11 @@ def generate_timekeeping_template(
     all_symbols_dict = []
     for idx, (_, r_row) in enumerate(df_rules.iterrows(), start=1):
         sym = str(r_row.get("Ký hiệu", "")).strip().upper()
-        if sym and sym != "TT":
+        if sym:
             all_symbols_dict.append({
                 "sym": sym,
                 "desc": r_row.get("Diễn giải", ""),
             })
-
-    # Sinh danh sách tổ hợp cơ bản và mở rộng linh hoạt cho phép kết hợp trực T (trừ TT)
-    single_codes = ["X", "B", "P", "H", "CT", "Ô", "O", "R", "K", "T"]
-    existing_syms = {item["sym"] for item in all_symbols_dict}
-
-    for c1 in single_codes:
-        for c2 in single_codes:
-            pair = f"{c1}{c2}"
-            if pair != "TT" and pair not in existing_syms:
-                all_symbols_dict.append({
-                    "sym": pair,
-                    "desc": f"Tổ hợp ghép: {c1} - {c2}",
-                })
-                existing_syms.add(pair)
-
-    # Thêm các tổ hợp 3 ký tự phổ biến có chứa T (như TPP, XXT, TXX, XTX...)
-    extra_combinations = ["TPP", "XXT", "TXX", "XTX", "XBT", "TX", "XT", "TP", "PT"]
-    for ex in extra_combinations:
-        if ex not in existing_syms:
-            all_symbols_dict.append({
-                "sym": ex,
-                "desc": f"Tổ hợp kết hợp trực đặc biệt: {ex}",
-            })
-            existing_syms.add(ex)
 
     for idx, item in enumerate(all_symbols_dict, start=1):
         ws_rules.append([idx, item["sym"], item["desc"]])
@@ -398,12 +374,19 @@ def generate_timekeeping_template(
             if day_fills.get(d_num):
                 cell.fill = day_fills[d_num]
 
-    # DATA VALIDATION TRỎ THẲNG VÀO VÙNG KÝ HIỆU (Gúp Excel tự động viết hoa khi nhập ký tự tương ứng)
-    rules_range_formula = f"QuyUocKyHieu!$B$4:$B${last_rule_row}"
+    # DATA VALIDATION: SỬ DỤNG CÔNG THỨC CUSTOM CHO PHÉP MỌI KÝ TỰ GHÉP VÀ CHẶN DUY NHẤT KHI CÓ "TT"
+    first_data_row = 6
+    last_data_row = 5 + (num_emp if num_emp > 0 else 50)
+    first_day_col = openpyxl.utils.get_column_letter(5)
+    last_day_col = openpyxl.utils.get_column_letter(4 + num_days)
+    target_range_str = (
+        f"{first_day_col}{first_data_row}:{last_day_col}{last_data_row}"
+    )
 
+    # Công thức Excel: =ISERROR(SEARCH("TT", E6)) -> Cho phép nhập mọi chữ cái gộp thoải mái (PTP, TXX, XXT...), chỉ chặn khi gõ "TT"
     dv = DataValidation(
-        type="list",
-        formula1=rules_range_formula,
+        type="custom",
+        formula1=f'=ISERROR(SEARCH("TT", {first_day_col}{first_data_row}))',
         allow_blank=True,
         errorStyle="stop",
         showErrorMessage=True,
@@ -412,23 +395,17 @@ def generate_timekeeping_template(
 
     dv.errorTitle = "❌ KÝ HIỆU KHÔNG HỢP LỆ"
     dv.error = (
-        "Ký hiệu nhập vào không nằm trong danh mục quy ước chuẩn hoặc bị thừa"
-        " ký tự T (Không được nhập 'TT')!"
+        "Không được phép nhập từ 2 chữ T trở lên trong cùng 1 ngày (Lỗi thừa"
+        " 'TT')!"
     )
     dv.promptTitle = "💡 QUY TẮC CHẤM CÔNG"
     dv.prompt = (
-        "Nhập ký hiệu chấm công (hệ thống tự động in hoa các ô ngày, giữ nguyên"
-        " các thông tin khác)."
+        "Cho phép gộp tự do các ký hiệu và trực 'T' (Ví dụ: PTP, TXX, XXT...). Chỉ"
+        " chặn nếu nhập 'TT'."
     )
 
     ws_main.add_data_validation(dv)
-
-    first_data_row = 6
-    last_data_row = 5 + (num_emp if num_emp > 0 else 50)
-    first_day_col = openpyxl.utils.get_column_letter(5)
-    last_day_col = openpyxl.utils.get_column_letter(4 + num_days)
-
-    dv.add(f"{first_day_col}{first_data_row}:{last_day_col}{last_data_row}")
+    dv.add(target_range_str)
 
     # --- KHU VỰC CHỮ KÝ IN ẤN A4 NẰM NGANG ---
     sign_row_header = last_data_row + 3
@@ -467,7 +444,9 @@ def generate_timekeeping_template(
     cell_sub_right = ws_main[f"{sign_right_start_col}{sign_sub_row}"]
     cell_sub_right.value = "(Ký tên, đóng dấu)"
     cell_sub_right.font = Font(name="Arial", size=9, italic=True)
-    cell_sub_right.alignment = Alignment(horizontal="center", vertical="center")
+    cell_sub_right.alignment = Alignment(
+        horizontal="center", vertical="center"
+    )
 
     ws_main.column_dimensions["A"].width = 6
     ws_main.column_dimensions["B"].width = 12
@@ -490,7 +469,7 @@ def generate_timekeeping_template(
 
 
 # ---------------------------------------------------------
-# 5. TÍNH TOÁN DỮ LIỆU TỔNG HỢP (TỰ ĐỘNG TÁCH & TÍNH TRỰC LƯU CSDL)
+# 5. TÍNH TOÁN DỮ LIỆU TỔNG HỢP (LINH HOẠT GỢI Ý MỌI TỔ HỢP)
 # ---------------------------------------------------------
 def parse_and_summarize(df_tk):
     if df_tk.empty:
@@ -518,66 +497,51 @@ def parse_and_summarize(df_tk):
             if not val or "TT" in val:
                 continue
 
+            # Đếm số ca trực dựa trên tổng số chữ T xuất hiện trong chuỗi ô đó
             t_count = val.count("T")
             if t_count > 0:
                 res["c_truc"] += float(t_count)
 
+            # Loại bỏ tất cả chữ T để quét và cộng dồn các ký tự công/nghỉ còn lại
             rem = val.replace("T", "")
             if not rem:
                 continue
 
-            if rem == "XX":
-                res["c_cong"] += 1.0
-            elif rem == "X":
-                res["c_cong"] += 0.5
-            elif rem == "BB":
-                res["c_b"] += 1.0
-            elif rem == "B":
-                res["c_b"] += 0.5
-            elif rem == "PP":
-                res["c_p"] += 1.0
-            elif rem == "P":
-                res["c_p"] += 0.5
-            elif rem in ["ÔÔ", "OO", "COCO"]:
-                res["c_o"] += 1.0
-            elif rem in ["Ô", "O", "CO"]:
-                res["c_o"] += 0.5
-            elif rem in ["HH", "CTCT", "RR"]:
-                res["c_cong"] += 1.0
-            elif rem in ["H", "CT", "R"]:
-                res["c_cong"] += 0.5
-            elif rem == "KO":
-                res["c_khl"] += 1.0
-            else:
-                i = 0
-                while i < len(rem):
-                    if (
-                        i + 1 < len(rem)
-                        and rem[i : i + 2] in ["XX", "BB", "PP", "ÔÔ", "OO"]
-                    ):
-                        pair = rem[i : i + 2]
-                        if pair in ["XX", "HH", "CTCT", "RR"]:
-                            res["c_cong"] += 1.0
-                        elif pair in ["BB"]:
-                            res["c_b"] += 1.0
-                        elif pair in ["PP"]:
-                            res["c_p"] += 1.0
-                        elif pair in ["ÔÔ", "OO"]:
-                            res["c_o"] += 1.0
-                        i += 2
-                    else:
-                        char = rem[i]
-                        if char in ["X", "H", "CT", "R"]:
-                            res["c_cong"] += 0.5
-                        elif char == "B":
-                            res["c_b"] += 0.5
-                        elif char == "P":
-                            res["c_p"] += 0.5
-                        elif char in ["Ô", "O"]:
-                            res["c_o"] += 0.5
-                        elif char == "K":
-                            res["c_khl"] += 1.0
-                        i += 1
+            # Quét nhận diện tự động từng nhóm ký tự hoặc ký tự đơn
+            i = 0
+            while i < len(rem):
+                # Kiểm tra các cặp ký tự đôi phổ biến
+                if i + 1 < len(rem) and rem[i : i + 2] in [
+                    "XX",
+                    "BB",
+                    "PP",
+                    "ÔÔ",
+                    "OO",
+                    "HH",
+                ]:
+                    pair = rem[i : i + 2]
+                    if pair in ["XX", "HH"]:
+                        res["c_cong"] += 1.0
+                    elif pair == "BB":
+                        res["c_b"] += 1.0
+                    elif pair == "PP":
+                        res["c_p"] += 1.0
+                    elif pair in ["ÔÔ", "OO"]:
+                        res["c_o"] += 1.0
+                    i += 2
+                else:
+                    char = rem[i]
+                    if char in ["X", "H", "CT", "R"]:
+                        res["c_cong"] += 0.5
+                    elif char == "B":
+                        res["c_b"] += 0.5
+                    elif char == "P":
+                        res["c_p"] += 0.5
+                    elif char in ["Ô", "O"]:
+                        res["c_o"] += 0.5
+                    elif char == "K":
+                        res["c_khl"] += 1.0
+                    i += 1
 
         rec = row.to_dict()
         rec["Tổng ngày công"] = res["c_cong"]
@@ -833,7 +797,7 @@ def render_timekeeping_management():
 
                 st.write(
                     "📌 **Dữ liệu đọc từ file chấm công (Đã tự động chuẩn hóa"
-                    " IN HOA các cột ngày):**"
+                    " IN HOA):**"
                 )
                 st.dataframe(df_up.head(10), use_container_width=True)
 
@@ -1016,7 +980,7 @@ def render_timekeeping_management():
             )
             selected_months = list(range(m_start, m_end + 1))
 
-        all_dfs = []
+            all_dfs = []
         for m in selected_months:
             df_m = load_timekeeping_db(m, rep_year)
             if not df_m.empty:
