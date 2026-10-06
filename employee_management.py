@@ -70,7 +70,7 @@ def reorder_columns(df, custom_order=None):
 
 def clean_dataframe_for_json(df):
     """Xử lý và chuyển đổi tất cả kiểu dữ liệu datetime/Timestamp sang chuỗi string để gửi JSON lên CSDL"""
-    df_clean = df.copy()
+    df_clean = df.copy().fillna("")
     for col in df_clean.columns:
         if pd.api.types.is_datetime64_any_dtype(df_clean[col]):
             df_clean[col] = (
@@ -83,6 +83,7 @@ def clean_dataframe_for_json(df):
                 .str.replace(" 00:00:00", "", regex=False)
                 .str.replace("NaT", "", regex=False)
                 .str.replace("nan", "", regex=False)
+                .str.replace("None", "", regex=False)
             )
     return df_clean
 
@@ -162,7 +163,7 @@ def render_employee_management():
         try:
             df_uploaded = pd.read_excel(uploaded_emp_file).fillna("")
 
-            # Chuyển đổi các cột kiểu datetime sang chuỗi văn bản trước khi đẩy lên JSON
+            # Chuyển đổi các cột kiểu datetime sang chuỗi văn bản
             df_uploaded = clean_dataframe_for_json(df_uploaded)
 
             # Ghi nhớ lại thứ tự cột gốc của file Excel
@@ -178,13 +179,13 @@ def render_employee_management():
                     "content": df_uploaded.to_dict(orient="records"),
                 }).execute()
 
+            st.toast("✅ Đã tải lên và lưu dữ liệu hồ sơ!", icon="🎉")
             st.success(
                 f"✅ Đã tải lên và lưu thành công {len(df_uploaded)} hồ sơ cán"
                 " bộ!"
             )
-            st.rerun()
         except Exception as e:
-            st.error(f"Lỗi khi xử lý file Excel: {e}")
+            st.error(f"❌ Lỗi khi xử lý file Excel: {e}")
 
     st.markdown("---")
     st.write(
@@ -213,9 +214,13 @@ def render_employee_management():
                     "title": "Hồ sơ Cán bộ Nhân viên",
                     "content": edited_clean.to_dict(orient="records"),
                 }).execute()
-                st.success("✅ Đã lưu vĩnh viễn dữ liệu hồ sơ cán bộ vào CSDL!")
-                st.rerun()
+                st.toast("✅ Đã lưu dữ liệu vào CSDL vĩnh viễn!", icon="💾")
+                st.success(
+                    "✅ Đã lưu thành công danh sách hồ sơ cán bộ vào cơ sở dữ"
+                    " liệu!"
+                )
             except Exception as e:
-                st.error(f"Lỗi khi lưu CSDL: {e}")
+                st.error(f"❌ Lỗi khi lưu vào CSDL: {e}")
         else:
-            st.success("✅ Đã cập nhật dữ liệu thành công!")
+            st.toast("✅ Đã cập nhật phiên làm việc!", icon="ℹ️")
+            st.success("✅ Đã cập nhật dữ liệu thành công vào bộ nhớ tạm!")
