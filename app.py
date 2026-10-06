@@ -218,18 +218,9 @@ if "1. Dashboard Tổng quan" in menu_selection:
 
 # --- PHÂN HỆ 2: DANH MỤC HỆ THỐNG ---
 elif "2. Danh mục Hệ thống" in menu_selection:
-    st.subheader("⚙️ Quản lý Danh mục Hệ thống & Đơn vị")
-    from category_management import (
-        render_category_management,  # Giả định gọi từ mô-đun chuẩn
-    )
+    from category_management import render_category_management
 
-    try:
-        render_category_management()
-    except Exception:
-        st.info(
-            "Phân hệ Danh mục Hệ thống đang kết nối trực tiếp với cơ sở dữ liệu"
-            " Supabase bảng `categories`."
-        )
+    render_category_management()
 
 # --- PHÂN HỆ 4: QUẢN LÝ HỒ SƠ CÁN BỘ ---
 elif "4. Quản lý Hồ sơ Cán bộ" in menu_selection:
