@@ -8,13 +8,13 @@ from openpyxl.worksheet.datavalidation import DataValidation
 import pandas as pd
 import streamlit as st
 
-# Bọc an toàn import Supabase tránh lỗi crash ImportError khi thiếu thư viện trong requirements.txt
+# Bọc an toàn import Supabase
 try:
     from supabase import create_client
 except ImportError:
     create_client = None
 
-# Danh mục ký hiệu chấm công hợp lệ & Bản đồ tự động chuyển chữ thường -> chữ IN HOA
+# Danh mục ký hiệu chấm công hợp lệ & Bản đồ chuyển chữ thường -> chữ IN HOA
 VALID_CODES_MAP = {
     "X": "X",
     "1": "X",
@@ -345,9 +345,7 @@ def calculate_summary_columns(df, date_cols):
 def generate_timekeeping_excel(unit_name, month, year, df_employees):
     wb = openpyxl.Workbook()
 
-    # ---------------------------------------------------------
     # SHEET 1: BẢNG CHẤM CÔNG HÀNG THÁNG
-    # ---------------------------------------------------------
     ws = wb.active
     ws.title = f"ChamCong_T{month}_{year}"
 
@@ -530,9 +528,7 @@ def generate_timekeeping_excel(unit_name, month, year, df_employees):
     for c in range(5 + days_in_month, last_col_idx + 1):
         ws.column_dimensions[get_column_letter(c)].width = 13
 
-    # ---------------------------------------------------------
     # SHEET 2: QUY ƯỚC CÁC KÝ HIỆU CHẤM CÔNG (TẠO BẢNG TRA CỨU)
-    # ---------------------------------------------------------
     rules_sheet_name = "Quy ước ký hiệu"
     ws_rules = wb.create_sheet(title=rules_sheet_name)
 
@@ -709,14 +705,14 @@ def render_timekeeping_management():
 
     date_cols = [c for c in df_tk_display.columns if "/" in str(c)]
 
-    # 1. TỰ ĐỘNG CHUYỂN TOÀN BỘ KÝ TỰ THƯỜNG THÀNH IN HOA
+    # 1. TỰ ĐỘNG CHUYỂN IN HOA TOÀN BỘ KÝ HIỆU
     for col in date_cols:
         df_tk_display[col] = df_tk_display[col].apply(clean_and_uppercase_code)
 
     # 2. TÍNH LẠI CÁC CỘT TỔNG HỢP CHI TIẾT
     df_tk_display = calculate_summary_columns(df_tk_display, date_cols)
 
-    # 3. PHÁT HIỆN VÀ CẢNH BÁO KÝ TỰ LẠ NẾU UPLOAD FILE CHỨA DỮ LIỆU SAI
+    # 3. PHÁT HIỆN VÀ CẢNH BÁO KÝ TỰ LẠ
     invalid_entries = []
     valid_codes_set = set(VALID_OPTIONS)
 
@@ -741,7 +737,7 @@ def render_timekeeping_management():
             " **F** (Lễ)."
         )
 
-    # Định dạng màu sắc cột (Chủ Nhật = Xanh Dương, Thứ 7 = Cam, Lễ = Đỏ)
+    # Định dạng màu sắc cột (Chủ Nhật = Xanh Dương Nhạt, Thứ 7 = Cam Nhạt, Lễ = Đỏ Nhạt)
     def highlight_days(col):
         col_name = str(col.name)
         if "/" in col_name:
@@ -808,7 +804,7 @@ def render_timekeeping_management():
             required=False,
         )
 
-    # BẢNG HIỂN THỊ STREAMLIT DATA EDITOR
+    # HIỂN THỊ BẢNG ĐIỀU CHỈNH
     edited_tk = st.data_editor(
         styled_df,
         use_container_width=True,
@@ -818,7 +814,7 @@ def render_timekeeping_management():
         key=f"editor_{tk_key}_{st.session_state[v_key]}",
     )
 
-    # TỰ ĐỘNG CHUYỂN IN HOA VÀ LÀM MỚI BẢNG
+    # TỰ ĐỘNG CẬP NHẬT TỔNG HỢP VÀ CHUYỂN HOA TỨC THÌ
     need_refresh = False
     for col in date_cols:
         if col in edited_tk.columns:
