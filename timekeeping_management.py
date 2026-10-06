@@ -31,10 +31,10 @@ def init_supabase():
 
 
 # ---------------------------------------------------------
-# 2. TRUY VẤN & LỌC DANH SÁCH CÁN BỘ THEO ĐƠN VỊ (LINH HOẠT TÊN CỘT)
+# 2. TRUY VẤN CHÍNH XÁC DANH SÁCH CÁN BỘ THEO ĐƠN VỊ
 # ---------------------------------------------------------
 def get_employees_by_unit(unit_name):
-    """Lấy danh sách cán bộ thuộc Đơn vị / Khoa phòng được chọn"""
+    """Lấy đúng danh sách cán bộ (Mã NV, Họ tên, Chức vụ) thuộc Đơn vị được chọn"""
     df_emp = pd.DataFrame()
 
     # 1. Lấy từ session_state nếu có
@@ -43,56 +43,76 @@ def get_employees_by_unit(unit_name):
         if isinstance(df_ses, pd.DataFrame) and not df_ses.empty:
             df_emp = df_ses.copy()
 
-    # 2. Nếu chưa có trong session, lấy từ Supabase
-    supabase = init_supabase()
-    if df_emp.empty and supabase:
-        try:
-            res = (
-                supabase.table("categories")
-                .select("content")
-                .eq("cat_key", "employees_profile")
-                .execute()
-            )
-            if res.data and res.data[0].get("content"):
-                df_emp = pd.DataFrame(res.data[0]["content"])
-        except Exception:
-            pass
+    # 2. Nếu chưa có trong session, lấy từ Supabase bảng categories (cat_key = employees_profile)
+    if df_emp.empty:
+        supabase = init_supabase()
+        if supabase:
+            try:
+                res = (
+                    supabase.table("categories")
+                    .select("content")
+                    .eq("cat_key", "employees_profile")
+                    .execute()
+                )
+                if res.data and res.data[0].get("content"):
+                    df_emp = pd.DataFrame(res.data[0]["content"])
+            except Exception:
+                pass
 
     if df_emp.empty:
         return pd.DataFrame(columns=["Mã NV", "Họ và tên", "Chức vụ", "Đơn vị"])
 
-    # 3. Chuẩn hóa tên các cột quan trọng
+    # 3. Chuẩn hóa chính xác tên các cột thông tin cán bộ
     col_mapping = {}
     for col in df_emp.columns:
         c_str = str(col).strip().lower()
         if c_str in ["mã nv", "mã cb", "mã nhân viên", "ma nv", "mã cán bộ"]:
             col_mapping[col] = "Mã NV"
-        elif c_str in ["họ và tên", "họ tên", "ho va ten", "tên cán bộ", "tên nhân viên"]:
+        elif c_str in [
+            "họ và tên",
+            "họ tên",
+            "ho va ten",
+            "tên cán bộ",
+            "tên nhân viên",
+        ]:
             col_mapping[col] = "Họ và tên"
         elif c_str in ["chức vụ", "chức danh", "chức vụ / chức danh", "vị trí"]:
             col_mapping[col] = "Chức vụ"
-        elif c_str in ["đơn vị", "khoa / phòng", "khoa/phòng", "phòng ban", "bộ phận", "đơn vị công tác"]:
+        elif c_str in [
+            "đơn vị",
+            "khoa / phòng",
+            "khoa/phòng",
+            "phòng ban",
+            "bộ phận",
+        ]:
             col_mapping[col] = "Đơn vị"
 
     df_emp.rename(columns=col_mapping, inplace=True)
 
-    # 4. Lọc danh sách nhân sự theo đơn vị chọn (So sánh linh hoạt không phân biệt hoa/thường)
-    if unit_name and unit_name != "Tất cả" and "Đơn vị" in df_emp.columns:
+    # Đảm bảo phải có cột 'Họ và tên' và 'Đơn vị'
+    if "Họ và tên" not in df_emp.columns or "Đơn vị" not in df_emp.columns:
+        return pd.DataFrame(columns=["Mã NV", "Họ và tên", "Chức vụ", "Đơn vị"])
+
+    # 4. Lọc nghiêm ngặt theo tên đơn vị
+    if unit_name and unit_name != "Tất cả":
         target_unit = str(unit_name).strip().lower()
 
-        def match_unit(val):
-            val_str = str(val).strip().lower()
-            return (target_unit == val_str) or (target_unit in val_str) or (val_str in target_unit)
+        def is_match_unit(val):
+            v_str = str(val).strip().lower()
+            return (
+                (target_unit == v_str)
+                or (target_unit in v_str)
+                or (v_str in target_unit)
+            )
 
-        df_filtered = df_emp[df_emp["Đơn vị"].apply(match_unit)].copy()
-        if not df_filtered.empty:
-            return df_filtered
+        df_filtered = df_emp[df_emp["Đơn vị"].apply(is_match_unit)].copy()
+        return df_filtered
 
     return df_emp
 
 
 # ---------------------------------------------------------
-# 3. TẠO FILE EXCEL MẪU CHẤM CÔNG VỚI ĐẦY ĐỦ CÁN BỘ & TÔ MÀU NGÀY NGHĨ
+# 3. TẠO FILE EXCEL MẪU CHẤM CÔNG VỚI DANH SÁCH CÁN BỘ CHUẨN
 # ---------------------------------------------------------
 def generate_timekeeping_excel(unit_name, month, year, df_employees):
     wb = openpyxl.Workbook()
@@ -108,9 +128,8 @@ def generate_timekeeping_excel(unit_name, month, year, df_employees):
     ws["A2"] = str(unit_name).upper()
     ws["A2"].font = Font(name="Arial", size=10, bold=True, color="002060")
 
-    # Số ngày trong tháng
     days_in_month = calendar.monthrange(year, month)[1]
-    last_col_idx = 4 + days_in_month + 5  # 4 cột thông tin + ngày trong tháng + 5 cột tổng hợp
+    last_col_idx = 4 + days_in_month + 5
     last_col_letter = get_column_letter(last_col_idx)
 
     ws.merge_cells(f"A4:{last_col_letter}4")
@@ -120,7 +139,6 @@ def generate_timekeeping_excel(unit_name, month, year, df_employees):
     ws["A4"].font = Font(name="Arial", size=12, bold=True, color="002060")
     ws["A4"].alignment = Alignment(horizontal="center", vertical="center")
 
-    # Cột tiêu đề
     headers = ["STT", "Mã NV", "Họ và tên", "Chức vụ"]
     date_cols = [f"{d:02d}/{month:02d}" for d in range(1, days_in_month + 1)]
     summary_headers = [
@@ -133,7 +151,7 @@ def generate_timekeeping_excel(unit_name, month, year, df_employees):
 
     all_headers = headers + date_cols + summary_headers
 
-    # Tạo dòng Tiêu đề cột (Dòng 5)
+    # Tiêu đề cột (Dòng 5)
     for col_idx, h_text in enumerate(all_headers, start=1):
         cell = ws.cell(row=5, column=col_idx, value=h_text)
         cell.font = Font(name="Arial", size=9, bold=True, color="FFFFFF")
@@ -141,7 +159,7 @@ def generate_timekeeping_excel(unit_name, month, year, df_employees):
             horizontal="center", vertical="center", wrap_text=True
         )
 
-        fill_color = "1F497D"  # Xanh navy chuẩn
+        fill_color = "1F497D"  # Xanh navy
         if 5 <= col_idx <= 4 + days_in_month:
             d = col_idx - 4
             dt = datetime(year, month, d)
@@ -154,9 +172,9 @@ def generate_timekeeping_excel(unit_name, month, year, df_employees):
             start_color=fill_color, end_color=fill_color, fill_type="solid"
         )
 
-    # ĐIỀN DANH SÁCH CÁN BỘ THỰC TẾ VÀO CÁC DÒNG
+    # Điền danh sách cán bộ chuẩn
     start_row = 6
-    if not df_employees.empty:
+    if not df_employees.empty and "Họ và tên" in df_employees.columns:
         for idx, (_, row_emp) in enumerate(df_employees.iterrows(), start=1):
             r = start_row + idx - 1
             ma_nv = str(
@@ -181,13 +199,13 @@ def generate_timekeeping_excel(unit_name, month, year, df_employees):
 
         max_row = start_row + len(df_employees) - 1
     else:
-        # Nếu chưa tìm thấy nhân sự thì tạo 15 dòng trống
-        max_row = start_row + 14
-        for idx in range(1, 15):
+        # Tạo 10 dòng trống nếu chưa có cán bộ
+        max_row = start_row + 9
+        for idx in range(1, 10):
             r = start_row + idx - 1
             ws.cell(row=r, column=1, value=idx)
 
-    # Định dạng viền và TÔ MÀU NGÀY NGHĨ CHO CÁC Ô CHẤM CÔNG
+    # Tô màu Thứ 7, Chủ nhật & Viền
     thin_border = Border(
         left=Side(style="thin", color="D9D9D9"),
         right=Side(style="thin", color="D9D9D9"),
@@ -197,10 +215,10 @@ def generate_timekeeping_excel(unit_name, month, year, df_employees):
 
     sun_fill = PatternFill(
         start_color="FCE4D6", end_color="FCE4D6", fill_type="solid"
-    )  # Nền đỏ/cam nhạt cho Chủ Nhật
+    )
     sat_fill = PatternFill(
         start_color="FFF2CC", end_color="FFF2CC", fill_type="solid"
-    )  # Nền vàng nhạt cho Thứ 7
+    )
 
     for r in range(6, max_row + 1):
         for c in range(1, last_col_idx + 1):
@@ -223,32 +241,6 @@ def generate_timekeeping_excel(unit_name, month, year, df_employees):
                     horizontal="center", vertical="center"
                 )
 
-    # RÀNG BUỘC KIỂM TRA QUY TẮC CHẤM CÔNG (BẠN CHẤM CÔNG EXCEL)
-    first_date_col = get_column_letter(5)
-    last_date_col = get_column_letter(4 + days_in_month)
-    date_range = f"{first_date_col}6:{last_date_col}{max_row}"
-
-    dv = DataValidation(
-        type="custom",
-        formula1=f'=ISERROR(FIND("TT", UPPER({first_date_col}6)))',
-        allow_blank=True,
-    )
-    dv.error = (
-        "Ký hiệu không hợp lệ! Không được chứa từ 2 chữ 'T' trở lên trong cùng 1"
-        " ô (Ví dụ: TT)."
-    )
-    dv.errorTitle = "Lỗi nhập ký hiệu chấm công"
-    dv.prompt = (
-        "QUY TẮC CHẤM CÔNG:\nHệ thống tự động in hoa ký tự.\nTuyệt đối không"
-        " nhập từ 2 chữ 'T' trở lên trong cùng một ô."
-    )
-    dv.promptTitle = "💡 QUY TẮC CHẤM CÔNG"
-    dv.showInputMessage = True
-    dv.showErrorMessage = True
-
-    ws.add_data_validation(dv)
-    dv.add(date_range)
-
     # Căn chỉnh độ rộng cột
     ws.column_dimensions["A"].width = 6
     ws.column_dimensions["B"].width = 14
@@ -266,7 +258,7 @@ def generate_timekeeping_excel(unit_name, month, year, df_employees):
 
 
 # ---------------------------------------------------------
-# 4. GIAO DIỆN PHÂN HỆ CHẤM CÔNG
+# 4. GIAO DIỆN CHẤM CÔNG
 # ---------------------------------------------------------
 def render_timekeeping_management():
     st.markdown(
@@ -276,7 +268,7 @@ def render_timekeeping_management():
 
     supabase = init_supabase()
 
-    # Lấy danh sách Đơn vị thực tế từ CSDL
+    # Lấy danh sách Đơn vị từ CSDL
     don_vi_list = ["Ban Giám đốc", "Khoa Cấp cứu", "Khoa Ngoại Tổng hợp"]
     if supabase:
         try:
@@ -297,7 +289,6 @@ def render_timekeeping_management():
         except Exception:
             pass
 
-    # Bộ lọc tháng/năm/đơn vị
     col_f1, col_f2, col_f3 = st.columns([2, 2, 4])
     with col_f1:
         selected_month = st.selectbox("Chọn Tháng:", list(range(1, 13)), index=9) # Mặc định Tháng 10
@@ -306,14 +297,13 @@ def render_timekeeping_management():
     with col_f3:
         selected_unit = st.selectbox("Chọn Đơn vị / Khoa / Phòng:", don_vi_list)
 
-    # Lấy danh sách nhân sự thực tế thuộc Đơn vị chọn
+    # Truy vấn chính xác cán bộ của đơn vị được chọn
     df_unit_emp = get_employees_by_unit(selected_unit)
 
     st.markdown("---")
     col_act1, col_act2 = st.columns([3, 4])
 
     with col_act1:
-        # Nút xuất file mẫu có dữ liệu cán bộ
         excel_data = generate_timekeeping_excel(
             selected_unit, selected_month, selected_year, df_unit_emp
         )
@@ -324,10 +314,6 @@ def render_timekeeping_management():
             file_name=f"Mau_Cham_Cong_{file_name_clean}_T{selected_month}_{selected_year}.xlsx",
             mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
             type="primary",
-        )
-        st.caption(
-            f"ℹ️ File Excel mẫu đã tự động điền **{len(df_unit_emp)} cán bộ** thuộc"
-            f" **{selected_unit}** kèm mã NV, chức vụ và tô màu Thứ 7, Chủ Nhật."
         )
 
     with col_act2:
@@ -346,7 +332,6 @@ def render_timekeeping_management():
         except Exception as e:
             st.error(f"Lỗi đọc file chấm công: {e}")
 
-    # Hiển thị bảng chấm công tương tác
     st.markdown("---")
     st.write(
         f"📋 **Bảng Chấm công Tháng {selected_month}/{selected_year} -"
@@ -359,18 +344,17 @@ def render_timekeeping_management():
     if tk_key in st.session_state:
         df_tk_display = st.session_state[tk_key]
     else:
-        # Khởi tạo bảng chấm công từ danh sách nhân sự thực tế
         cols = ["STT", "Mã NV", "Họ và tên", "Chức vụ"] + [
             f"{d:02d}/{selected_month:02d}" for d in range(1, days_in_month + 1)
         ]
-        if not df_unit_emp.empty:
+        if not df_unit_emp.empty and "Họ và tên" in df_unit_emp.columns:
             data_rows = []
             for idx, (_, r) in enumerate(df_unit_emp.iterrows(), start=1):
                 row_dict = {
                     "STT": idx,
-                    "Mã NV": r.get("Mã NV") or r.get("Mã CB") or "",
-                    "Họ và tên": r.get("Họ và tên") or "",
-                    "Chức vụ": r.get("Chức vụ") or r.get("Chức danh") or "",
+                    "Mã NV": str(r.get("Mã NV") or r.get("Mã CB") or "").strip(),
+                    "Họ và tên": str(r.get("Họ và tên") or r.get("Họ tên") or "").strip(),
+                    "Chức vụ": str(r.get("Chức vụ") or r.get("Chức danh") or "").strip(),
                 }
                 for d in range(1, days_in_month + 1):
                     row_dict[f"{d:02d}/{selected_month:02d}"] = "X"
@@ -378,8 +362,12 @@ def render_timekeeping_management():
             df_tk_display = pd.DataFrame(data_rows)
         else:
             df_tk_display = pd.DataFrame(columns=cols)
+            st.info(
+                f"ℹ️ Chưa có danh sách cán bộ đăng ký thuộc đơn vị **{selected_unit}** trong Hồ sơ Cán bộ. "
+                f"Bạn có thể thêm dòng trực tiếp trên bảng bên dưới hoặc cập nhật thêm ở mục **4. Quản lý Hồ sơ Cán bộ**."
+            )
 
-    # Hàm tô màu cột ngày nghỉ Thứ 7, Chủ Nhật trên Streamlit UI
+    # Tô màu Thứ 7, Chủ Nhật trên giao diện
     def highlight_weekends(col):
         col_name = str(col.name)
         if "/" in col_name:
