@@ -30,7 +30,7 @@ def init_supabase():
 
 
 # ---------------------------------------------------------
-# 2. KIỂM TRA NGÀY LỄ NGHỈ CHÍNH THỨC (VIỆT NAM)
+# 2. KIỂM TRA NGÀY LỄ VIỆT NAM (01/09, 02/09, 30/04, 01/05, TẾT...)
 # ---------------------------------------------------------
 def is_vietnam_holiday(day, month, year=2026):
     """Xác định các ngày nghỉ lễ chính thức theo quy định"""
@@ -53,13 +53,13 @@ def is_vietnam_holiday(day, month, year=2026):
 
 
 # ---------------------------------------------------------
-# 3. QUÉT TỰ ĐỘNG VÀ ĐẦY ĐỦ 100% DANH SÁCH ĐƠN VỊ TỪ HỆ THỐNG
+# 3. NẠP DANH SÁCH ĐƠN VỊ TỪ CSDL
 # ---------------------------------------------------------
 def load_system_units(supabase_client):
-    """Gom tự động toàn bộ Đơn vị từ 'Danh mục Hệ thống' VÀ 'Hồ sơ Cán bộ'"""
+    """Gom toàn bộ Đơn vị khai báo từ 'Danh mục Hệ thống' VÀ 'Hồ sơ Cán bộ'"""
     units_set = set()
 
-    # Nguồn 1: Lấy từ bảng Danh mục Đơn vị (cat_key = 'don_vi')
+    # Nguồn 1: Bảng Danh mục Đơn vị (cat_key = 'don_vi')
     if supabase_client:
         try:
             res = (
@@ -80,7 +80,7 @@ def load_system_units(supabase_client):
         except Exception:
             pass
 
-    # Nguồn 2: Quét toàn bộ cột Đơn vị trong Hồ sơ Cán bộ (employees_profile)
+    # Nguồn 2: Cột Đơn vị trong Hồ sơ Cán bộ
     df_emp = pd.DataFrame()
     if "employees_profile" in st.session_state:
         df_emp = st.session_state["employees_profile"]
@@ -111,19 +111,19 @@ def load_system_units(supabase_client):
             "Ban Giám đốc",
             "Khoa Cấp cứu",
             "Khoa Ngoại Tổng hợp",
+            "Phòng Điều dưỡng",
             "Phòng Nhân sự - Tổng hợp",
             "Phòng Tài chính - Kế toán",
         ]
 
-    # Trả về danh sách đơn vị đã được sắp xếp bảng chữ cái
     return sorted(list(units_set))
 
 
 # ---------------------------------------------------------
-# 4. LỌC CHÍNH XÁC NHÂN SỰ THEO ĐƠN VỊ
+# 4. LỌC CHÍNH XÁC NHÂN SỰ THEO ĐƠN VỊ (ĐÃ SỬA LỖI CHÈN CHỜ ĐƠN VỊ RỖNG)
 # ---------------------------------------------------------
 def get_employees_by_unit(unit_name, all_units):
-    """Lấy đúng danh sách cán bộ thuộc Đơn vị chọn, loại bỏ tên các phòng ban"""
+    """Chỉ lấy đúng cán bộ khớp chính xác 100% Đơn vị được chọn"""
     df_emp = pd.DataFrame()
 
     if "employees_profile" in st.session_state:
@@ -164,10 +164,10 @@ def get_employees_by_unit(unit_name, all_units):
 
     df_emp.rename(columns=col_mapping, inplace=True)
 
-    if "Họ và tên" not in df_emp.columns:
+    if "Họ và tên" not in df_emp.columns or "Đơn vị" not in df_emp.columns:
         return pd.DataFrame(columns=["Mã NV", "Họ và tên", "Chức vụ", "Đơn vị"])
 
-    # Loại bỏ dòng là tên Đơn vị
+    # Loại bỏ dòng dò nhầm tên Đơn vị
     unit_set_lower = set(u.lower() for u in all_units)
     dept_prefixes = ["phòng ", "khoa ", "ban ", "tổ ", "trung tâm "]
 
@@ -184,15 +184,19 @@ def get_employees_by_unit(unit_name, all_units):
 
     df_emp = df_emp[df_emp.apply(is_real_person, axis=1)].copy()
 
-    # Lọc theo đơn vị chọn
-    if unit_name and unit_name != "Tất cả" and "Đơn vị" in df_emp.columns:
+    # SO SÁNH CHÍNH XÁC ĐƠN VỊ (CHẶN HOÀN TOÀN Ô RỖNG)
+    if unit_name and unit_name != "Tất cả":
         target_unit = str(unit_name).strip().lower()
 
-        def is_match_unit(val):
+        def is_exact_match_unit(val):
             v_str = str(val).strip().lower()
-            return (target_unit == v_str) or (target_unit in v_str) or (v_str in target_unit)
+            # Nếu ô đơn vị của cán bộ bị rỗng -> Bỏ qua ngay lập tức
+            if not v_str or v_str in ["nan", "none", ""]:
+                return False
+            # So sánh chính xác
+            return v_str == target_unit
 
-        df_filtered = df_emp[df_emp["Đơn vị"].apply(is_match_unit)].copy()
+        df_filtered = df_emp[df_emp["Đơn vị"].apply(is_exact_match_unit)].copy()
         return df_filtered
 
     return df_emp
@@ -334,7 +338,7 @@ def render_timekeeping_management():
 
     supabase = init_supabase()
 
-    # Quét đầy đủ tất cả Đơn vị có trong hệ thống
+    # Nạp danh sách đơn vị chuẩn
     all_units = load_system_units(supabase)
 
     col_f1, col_f2, col_f3 = st.columns([2, 2, 4])
@@ -345,7 +349,7 @@ def render_timekeeping_management():
     with col_f3:
         selected_unit = st.selectbox("Chọn Đơn vị / Khoa / Phòng:", all_units)
 
-    # Lấy cán bộ thực tế thuộc đơn vị
+    # Lấy chính xác danh sách cán bộ thuộc đơn vị chọn
     df_unit_emp = get_employees_by_unit(selected_unit, all_units)
 
     st.markdown("---")
@@ -404,7 +408,6 @@ def render_timekeeping_management():
                     "Họ và tên": str(r.get("Họ và tên") or r.get("Họ tên") or "").strip(),
                     "Chức vụ": str(r.get("Chức vụ") or r.get("Chức danh") or "").strip(),
                 }
-                # Mặc định để trống ô ngày công
                 for d in range(1, days_in_month + 1):
                     row_dict[f"{d:02d}/{selected_month:02d}"] = ""
                 data_rows.append(row_dict)
@@ -416,7 +419,7 @@ def render_timekeeping_management():
                 f"Bạn có thể thêm dòng trực tiếp trên bảng bên dưới hoặc nhập danh sách tại mục **4. Quản lý Hồ sơ Cán bộ**."
             )
 
-    # Tô màu Ngày Lễ, Thứ 7, Chủ Nhật trên bảng giao diện
+    # Tô màu Ngày Lễ, Thứ 7, Chủ Nhật trên giao diện
     def highlight_days(col):
         col_name = str(col.name)
         if "/" in col_name:
