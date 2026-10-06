@@ -14,7 +14,22 @@ try:
 except ImportError:
     create_client = None
 
-# Danh mục ký hiệu chấm công hợp lệ & Bản đồ chuyển chữ thường -> chữ IN HOA
+# Mặc định danh mục ký hiệu chấm công đầy đủ (có thể nạp mở rộng từ CSDL)
+DEFAULT_RULES = [
+    ("X", "Làm việc cả ngày (Tính 1 công)"),
+    ("P", "Nghỉ phép năm có hưởng lương"),
+    ("ÔM", "Nghỉ ốm đau có xác nhận của cơ sở y tế"),
+    ("CO", "Nghỉ con ốm có xác nhận y tế"),
+    ("CT", "Đi công tác / Học tập ngoài đơn vị"),
+    ("T", "Trực / Ca trực theo phân công"),
+    ("TS", "Nghỉ thai sản theo quy định"),
+    ("KL", "Nghỉ không hưởng lương"),
+    ("R", "Nghỉ việc riêng (được duyệt)"),
+    ("H", "Học tập / Bồi dưỡng chuyên môn"),
+    ("F", "Nghỉ Lễ / Tết hưởng nguyên lương"),
+]
+
+# Map chuẩn hóa ký hiệu (tự động quy đổi chữ thường/biến thể sang chuẩn in hoa)
 VALID_CODES_MAP = {
     "X": "X",
     "1": "X",
@@ -71,10 +86,59 @@ def init_supabase():
 
 
 # ---------------------------------------------------------
-# 2. KIỂM TRA NGÀY LỄ VIỆT NAM & CHUẨN HÓA KÝ TỰ
+# 2. LẤY DANH MỤC KÝ HIỆU CHẤM CÔNG TỪ CSDL (DANH MỤC HỆ THỐNG)
+# ---------------------------------------------------------
+def load_system_rules(supabase_client):
+    """Truy vấn các quy ước ký hiệu đã khai báo trong bảng categories"""
+    rules_list = list(DEFAULT_RULES)
+    seen_codes = {r[0].upper() for r in rules_list}
+
+    if supabase_client:
+        try:
+            res = (
+                supabase_client.table("categories")
+                .select("content, cat_key")
+                .execute()
+            )
+            if res.data:
+                for row in res.data:
+                    c_key = str(row.get("cat_key", "")).lower()
+                    if any(
+                        k in c_key for k in ["ky_hieu", "cham_cong", "quy_uoc", "rule"]
+                    ):
+                        content = row.get("content")
+                        if isinstance(content, list):
+                            for item in content:
+                                if isinstance(item, dict):
+                                    code = str(
+                                        item.get("ký hiệu")
+                                        or item.get("ky_hieu")
+                                        or item.get("code")
+                                        or ""
+                                    ).strip().upper()
+                                    desc = str(
+                                        item.get("diễn giải")
+                                        or item.get("dien_giai")
+                                        or item.get("ý nghĩa")
+                                        or item.get("description")
+                                        or ""
+                                    ).strip()
+                                    if code and code not in seen_codes:
+                                        rules_list.append((code, desc or code))
+                                        seen_codes.add(code)
+                                        VALID_CODES_MAP[code] = code
+                                        VALID_CODES_MAP[code.lower()] = code
+                                        if code not in VALID_OPTIONS:
+                                            VALID_OPTIONS.append(code)
+        except Exception:
+            pass
+    return rules_list
+
+
+# ---------------------------------------------------------
+# 3. KIỂM TRA NGÀY LỄ VIỆT NAM & CHUẨN HÓA KÝ TỰ
 # ---------------------------------------------------------
 def is_vietnam_holiday(day, month, year=2026):
-    """Xác định các ngày nghỉ lễ chính thức theo quy định nhà nước"""
     fixed_holidays = [(1, 1), (30, 4), (1, 5), (1, 9), (2, 9)]
     if (day, month) in fixed_holidays:
         return True
@@ -115,7 +179,7 @@ def clean_and_uppercase_code(val):
 
 
 # ---------------------------------------------------------
-# 3. QUÉT TỰ ĐỘNG DANH SÁCH ĐƠN VỊ TỪ CSDL
+# 4. QUÉT TỰ ĐỘNG DANH SÁCH ĐƠN VỊ TỪ CSDL
 # ---------------------------------------------------------
 def load_system_units(supabase_client):
     units_set = set()
@@ -182,6 +246,7 @@ def load_system_units(supabase_client):
             "Ban Giám đốc",
             "Khoa Cấp cứu",
             "Khoa Mắt",
+            "Khoa Xét nghiệm 2",
             "Khoa Ngoại Tổng hợp",
             "Phòng Điều dưỡng",
             "Phòng Nhân sự - Tổng hợp",
@@ -192,7 +257,7 @@ def load_system_units(supabase_client):
 
 
 # ---------------------------------------------------------
-# 4. LỌC CHÍNH XÁC CÁN BỘ THEO ĐƠN VỊ
+# 5. LỌC CHÍNH XÁC CÁN BỘ THEO ĐƠN VỊ
 # ---------------------------------------------------------
 def get_employees_by_unit(unit_name, all_units):
     df_emp = pd.DataFrame()
@@ -306,7 +371,7 @@ def get_employees_by_unit(unit_name, all_units):
 
 
 # ---------------------------------------------------------
-# 5. TÍNH TOÁN BÁO CÁO CỘT TỔNG HỢP CHO DỮ LIỆU
+# 6. TÍNH TOÁN BÁO CÁO CỘT TỔNG HỢP CHO DỮ LIỆU
 # ---------------------------------------------------------
 def calculate_summary_columns(df, date_cols):
     def calc_row(row):
@@ -340,16 +405,18 @@ def calculate_summary_columns(df, date_cols):
 
 
 # ---------------------------------------------------------
-# 6. TẠO FILE EXCEL 2 SHEET CÓ DROPDOWN LIÊN KẾT SHEET 2
+# 7. TẠO FILE EXCEL 2 SHEET (ĐÃ NẠP ĐỦ QUY ƯỚC TỪ CSDL)
 # ---------------------------------------------------------
 def generate_timekeeping_excel(unit_name, month, year, df_employees):
+    supabase = init_supabase()
+    rules_data = load_system_rules(supabase)
+
     wb = openpyxl.Workbook()
 
     # SHEET 1: BẢNG CHẤM CÔNG HÀNG THÁNG
     ws = wb.active
     ws.title = f"ChamCong_T{month}_{year}"
 
-    # Tiêu đề
     ws.merge_cells("A1:D1")
     ws["A1"] = "BỆNH VIỆN BƯU ĐIỆN"
     ws["A1"].font = Font(name="Arial", size=10, bold=True, color="002060")
@@ -381,7 +448,6 @@ def generate_timekeeping_excel(unit_name, month, year, df_employees):
 
     all_headers = headers + date_cols + summary_headers
 
-    # Định dạng Dòng 5: Tiêu đề cột
     for col_idx, h_text in enumerate(all_headers, start=1):
         cell = ws.cell(row=5, column=col_idx, value=h_text)
         cell.font = Font(name="Arial", size=9, bold=True, color="FFFFFF")
@@ -389,19 +455,19 @@ def generate_timekeeping_excel(unit_name, month, year, df_employees):
             horizontal="center", vertical="center", wrap_text=True
         )
 
-        fill_color = "1F497D"  # Xanh navy
+        fill_color = "1F497D"
         if 5 <= col_idx <= 4 + days_in_month:
             d = col_idx - 4
             if is_vietnam_holiday(d, month, year):
-                fill_color = "C00000"  # Đỏ Lễ
+                fill_color = "C00000"
             else:
                 dt = datetime(year, month, d)
                 if dt.weekday() == 6:
-                    fill_color = "4F81BD"  # Xanh Dương Chủ Nhật
+                    fill_color = "4F81BD"
                 elif dt.weekday() == 5:
-                    fill_color = "ED7D31"  # Cam Thứ 7
+                    fill_color = "ED7D31"
         elif col_idx > 4 + days_in_month:
-            fill_color = "274E13"  # Xanh Lá Đậm cho Cột Tổng Hợp Báo Cáo
+            fill_color = "274E13"
 
         cell.fill = PatternFill(
             start_color=fill_color, end_color=fill_color, fill_type="solid"
@@ -435,7 +501,6 @@ def generate_timekeeping_excel(unit_name, month, year, df_employees):
         ws.cell(row=r, column=3).alignment = Alignment(horizontal="left")
         ws.cell(row=r, column=4).alignment = Alignment(horizontal="left")
 
-        # CÔNG THỨC EXCEL TỰ ĐỘNG
         c_base = 5 + days_in_month
         ws.cell(
             row=r,
@@ -528,7 +593,7 @@ def generate_timekeeping_excel(unit_name, month, year, df_employees):
     for c in range(5 + days_in_month, last_col_idx + 1):
         ws.column_dimensions[get_column_letter(c)].width = 13
 
-    # SHEET 2: QUY ƯỚC CÁC KÝ HIỆU CHẤM CÔNG (TẠO BẢNG TRA CỨU)
+    # SHEET 2: QUY ƯỚC KÝ HIỆU (NẠP TOÀN BỘ TỪ HỆ THỐNG)
     rules_sheet_name = "Quy ước ký hiệu"
     ws_rules = wb.create_sheet(title=rules_sheet_name)
 
@@ -546,20 +611,7 @@ def generate_timekeeping_excel(unit_name, month, year, df_employees):
         )
         c_cell.alignment = Alignment(horizontal="center", vertical="center")
 
-    rules_data = [
-        ("X", "Làm việc cả ngày (Tính 1 công)"),
-        ("P", "Nghỉ phép năm có hưởng lương"),
-        ("ÔM", "Nghỉ ốm đau có xác nhận của cơ sở y tế"),
-        ("CO", "Nghỉ con ốm có xác nhận y tế"),
-        ("CT", "Đi công tác / Học tập ngoài đơn vị"),
-        ("T", "Trực / Ca trực theo phân công"),
-        ("TS", "Nghỉ thai sản theo quy định"),
-        ("KL", "Nghỉ không hưởng lương"),
-        ("R", "Nghỉ việc riêng (được duyệt)"),
-        ("H", "Học tập / Bồi dưỡng chuyên môn"),
-        ("F", "Nghỉ Lễ / Tết hưởng nguyên lương"),
-    ]
-
+    last_rule_row = 3 + len(rules_data)
     for idx, (code, desc) in enumerate(rules_data, start=1):
         r_idx = 3 + idx
         ws_rules.cell(row=r_idx, column=1, value=idx).alignment = Alignment(
@@ -578,11 +630,11 @@ def generate_timekeeping_excel(unit_name, month, year, df_employees):
     ws_rules.column_dimensions["B"].width = 15
     ws_rules.column_dimensions["C"].width = 45
 
-    # GÁN THAM CHIẾU DROPDOWN TRỰC TIẾP TỪ BẢNG KÝ HIỆU Ở SHEET 2
-    rules_range_ref = f"='{rules_sheet_name}'!$B$4:$B$14"
+    # GÁN THAM CHIẾU DROPDOWN DỰA TRÊN ĐỘ DÀI THỰC TẾ CỦA SHEET 2
+    rules_range_ref = f"='{rules_sheet_name}'!$B$4:$B${last_rule_row}"
     dv = DataValidation(type="list", formula1=rules_range_ref, allow_blank=True)
     dv.errorTitle = "Lỗi nhập ký hiệu chấm công"
-    dv.error = "Ký hiệu không hợp lệ! Vui lòng chọn ký hiệu từ danh sách menu thả xuống."
+    dv.error = "Ký hiệu không hợp lệ! Vui lòng chọn từ menu thả xuống."
     ws.add_data_validation(dv)
     dv.add(f"{first_d_letter}6:{last_d_letter}{max_row}")
 
@@ -593,7 +645,7 @@ def generate_timekeeping_excel(unit_name, month, year, df_employees):
 
 
 # ---------------------------------------------------------
-# 7. GIAO DIỆN CHẤM CÔNG VÀ BÁO CÁO TỔNG HỢP (STREAMLIT)
+# 8. GIAO DIỆN CHẤM CÔNG VÀ BÁO CÁO TỔNG HỢP (STREAMLIT)
 # ---------------------------------------------------------
 def render_timekeeping_management():
     st.markdown(
@@ -603,6 +655,10 @@ def render_timekeeping_management():
 
     supabase = init_supabase()
     all_units = load_system_units(supabase)
+    system_rules = load_system_rules(supabase)
+    for code, _ in system_rules:
+        if code not in VALID_OPTIONS:
+            VALID_OPTIONS.append(code)
 
     col_f1, col_f2, col_f3 = st.columns([2, 2, 4])
     with col_f1:
@@ -731,10 +787,8 @@ def render_timekeeping_management():
             " ĐỊNH!**\n"
             + "\n".join(invalid_entries[:8])
             + ("\n... và các ô khác." if len(invalid_entries) > 8 else "")
-            + "\n\n👉 *Ký hiệu chuẩn:* **X** (Công), **P** (Phép), **ÔM**"
-            " (Ốm), **CO** (Con ốm), **CT** (Công tác), **T** (Trực), **TS**"
-            " (Thai sản), **KL** (Không lương), **R** (Việc riêng), **H** (Học),"
-            " **F** (Lễ)."
+            + "\n\n👉 *Vui lòng chọn hoặc nhập các ký hiệu chuẩn theo Quy ước hệ"
+            " thống.*"
         )
 
     # Định dạng màu sắc cột (Chủ Nhật = Xanh Dương Nhạt, Thứ 7 = Cam Nhạt, Lễ = Đỏ Nhạt)
