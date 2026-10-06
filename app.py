@@ -234,33 +234,8 @@ elif "2. Danh mục Hệ thống" in menu_selection:
 # --- PHÂN HỆ 4: QUẢN LÝ HỒ SƠ CÁN BỘ ---
 elif "4. Quản lý Hồ sơ Cán bộ" in menu_selection:
     from employee_management import render_employee_management
+
     render_employee_management()
-    st.markdown("### 👤 Quản lý Hồ sơ Cán bộ (Mẫu Sơ yếu lý lịch chuẩn Bộ Nội vụ)")
-    df_emp_all = load_employees_data()
-
-    up_file = st.file_uploader(
-        "📂 Nhập dữ liệu hồ sơ từ file Excel (Mẫu chuẩn):", type=["xlsx", "xls"]
-    )
-    if up_file:
-        try:
-            df_uploaded = pd.read_excel(up_file).fillna("")
-            st.session_state["employees_profile"] = df_uploaded
-            if supabase:
-                supabase.table("categories").upsert({
-                    "cat_key": "employees_profile",
-                    "title": "Hồ sơ Cán bộ Nhân viên",
-                    "content": df_uploaded.to_dict(orient="records"),
-                }).execute()
-            st.success(
-                f"✅ Đã tải lên và cập nhật thành công {len(df_uploaded)} hồ sơ"
-                " cán bộ vào hệ thống!"
-            )
-            st.rerun()
-        except Exception as e:
-            st.error(f"Lỗi đọc file: {e}")
-
-    st.write("📋 **Danh sách Hồ sơ Cán bộ hiện tại trong Hệ thống:**")
-    st.dataframe(df_emp_all, use_container_width=True, hide_index=True)
 
 # --- PHÂN HỆ 8: CHẤM CÔNG - CA TRỰC - PHÂN LỊCH ---
 elif "8. Chấm công - Ca trực - Phân lịch" in menu_selection:
