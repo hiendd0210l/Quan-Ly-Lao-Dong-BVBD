@@ -8,13 +8,13 @@ from openpyxl.worksheet.datavalidation import DataValidation
 import pandas as pd
 import streamlit as st
 
-# Bọc an toàn import Supabase tránh lỗi crash ImportError khi thiếu thư viện
+# Bọc an toàn import Supabase tránh lỗi crash ImportError khi thiếu thư viện trong requirements.txt
 try:
     from supabase import create_client
 except ImportError:
     create_client = None
 
-# Map chuẩn hóa ký hiệu chấm công (kể cả chữ thường và viết tắt)
+# Danh mục ký hiệu chấm công hợp lệ & Bản đồ tự động chuyển chữ thường -> chữ IN HOA
 VALID_CODES_MAP = {
     "X": "X",
     "1": "X",
@@ -71,9 +71,10 @@ def init_supabase():
 
 
 # ---------------------------------------------------------
-# 2. KIỂM TRA NGÀY LỄ VIỆT NAM & CHUẨN HÓA
+# 2. KIỂM TRA NGÀY LỄ VIỆT NAM & CHUẨN HÓA KÝ TỰ
 # ---------------------------------------------------------
 def is_vietnam_holiday(day, month, year=2026):
+    """Xác định các ngày nghỉ lễ chính thức theo quy định nhà nước"""
     fixed_holidays = [(1, 1), (30, 4), (1, 5), (1, 9), (2, 9)]
     if (day, month) in fixed_holidays:
         return True
@@ -104,6 +105,7 @@ def normalize_str(s):
 
 
 def clean_and_uppercase_code(val):
+    """Tự động chuyển chữ thường sang IN HOA & chuẩn hóa ký hiệu chấm công"""
     if pd.isna(val) or val is None:
         return ""
     v_str = str(val).strip()
@@ -304,7 +306,7 @@ def get_employees_by_unit(unit_name, all_units):
 
 
 # ---------------------------------------------------------
-# 5. TÍNH TOÁN CỘT TỔNG HỢP DỮ LIỆU
+# 5. TÍNH TOÁN BÁO CÁO CỘT TỔNG HỢP CHO DỮ LIỆU
 # ---------------------------------------------------------
 def calculate_summary_columns(df, date_cols):
     def calc_row(row):
@@ -338,15 +340,18 @@ def calculate_summary_columns(df, date_cols):
 
 
 # ---------------------------------------------------------
-# 6. EXPORT FILE EXCEL (CÓ SHEET QUY ƯỚC & DROPDOWN VALIDATION)
+# 6. TẠO FILE EXCEL 2 SHEET CÓ DROPDOWN LIÊN KẾT SHEET 2
 # ---------------------------------------------------------
 def generate_timekeeping_excel(unit_name, month, year, df_employees):
     wb = openpyxl.Workbook()
 
-    # SHEET 1: BẢNG CHẤM CÔNG
+    # ---------------------------------------------------------
+    # SHEET 1: BẢNG CHẤM CÔNG HÀNG THÁNG
+    # ---------------------------------------------------------
     ws = wb.active
     ws.title = f"ChamCong_T{month}_{year}"
 
+    # Tiêu đề
     ws.merge_cells("A1:D1")
     ws["A1"] = "BỆNH VIỆN BƯU ĐIỆN"
     ws["A1"].font = Font(name="Arial", size=10, bold=True, color="002060")
@@ -378,6 +383,7 @@ def generate_timekeeping_excel(unit_name, month, year, df_employees):
 
     all_headers = headers + date_cols + summary_headers
 
+    # Định dạng Dòng 5: Tiêu đề cột
     for col_idx, h_text in enumerate(all_headers, start=1):
         cell = ws.cell(row=5, column=col_idx, value=h_text)
         cell.font = Font(name="Arial", size=9, bold=True, color="FFFFFF")
@@ -385,19 +391,19 @@ def generate_timekeeping_excel(unit_name, month, year, df_employees):
             horizontal="center", vertical="center", wrap_text=True
         )
 
-        fill_color = "1F497D"
+        fill_color = "1F497D"  # Xanh navy
         if 5 <= col_idx <= 4 + days_in_month:
             d = col_idx - 4
             if is_vietnam_holiday(d, month, year):
-                fill_color = "C00000"
+                fill_color = "C00000"  # Đỏ Lễ
             else:
                 dt = datetime(year, month, d)
                 if dt.weekday() == 6:
-                    fill_color = "4F81BD"
+                    fill_color = "4F81BD"  # Xanh Dương Chủ Nhật
                 elif dt.weekday() == 5:
-                    fill_color = "ED7D31"
+                    fill_color = "ED7D31"  # Cam Thứ 7
         elif col_idx > 4 + days_in_month:
-            fill_color = "274E13"
+            fill_color = "274E13"  # Xanh Lá Đậm cho Cột Tổng Hợp Báo Cáo
 
         cell.fill = PatternFill(
             start_color=fill_color, end_color=fill_color, fill_type="solid"
@@ -431,6 +437,7 @@ def generate_timekeeping_excel(unit_name, month, year, df_employees):
         ws.cell(row=r, column=3).alignment = Alignment(horizontal="left")
         ws.cell(row=r, column=4).alignment = Alignment(horizontal="left")
 
+        # CÔNG THỨC EXCEL TỰ ĐỘNG
         c_base = 5 + days_in_month
         ws.cell(
             row=r,
@@ -523,7 +530,9 @@ def generate_timekeeping_excel(unit_name, month, year, df_employees):
     for c in range(5 + days_in_month, last_col_idx + 1):
         ws.column_dimensions[get_column_letter(c)].width = 13
 
-    # SHEET 2: QUY ƯỚC KÝ HIỆU
+    # ---------------------------------------------------------
+    # SHEET 2: QUY ƯỚC CÁC KÝ HIỆU CHẤM CÔNG (TẠO BẢNG TRA CỨU)
+    # ---------------------------------------------------------
     rules_sheet_name = "Quy ước ký hiệu"
     ws_rules = wb.create_sheet(title=rules_sheet_name)
 
@@ -573,11 +582,11 @@ def generate_timekeeping_excel(unit_name, month, year, df_employees):
     ws_rules.column_dimensions["B"].width = 15
     ws_rules.column_dimensions["C"].width = 45
 
-    # DATA VALIDATION THAM CHIẾU SHEET 2
+    # GÁN THAM CHIẾU DROPDOWN TRỰC TIẾP TỪ BẢNG KÝ HIỆU Ở SHEET 2
     rules_range_ref = f"='{rules_sheet_name}'!$B$4:$B$14"
     dv = DataValidation(type="list", formula1=rules_range_ref, allow_blank=True)
     dv.errorTitle = "Lỗi nhập ký hiệu chấm công"
-    dv.error = "Ký hiệu không hợp lệ! Vui lòng chọn từ menu thả xuống."
+    dv.error = "Ký hiệu không hợp lệ! Vui lòng chọn ký hiệu từ danh sách menu thả xuống."
     ws.add_data_validation(dv)
     dv.add(f"{first_d_letter}6:{last_d_letter}{max_row}")
 
@@ -588,7 +597,7 @@ def generate_timekeeping_excel(unit_name, month, year, df_employees):
 
 
 # ---------------------------------------------------------
-# 7. GIAO DIỆN CHẤM CÔNG HÀNG THÁNG
+# 7. GIAO DIỆN CHẤM CÔNG VÀ BÁO CÁO TỔNG HỢP (STREAMLIT)
 # ---------------------------------------------------------
 def render_timekeeping_management():
     st.markdown(
@@ -633,3 +642,206 @@ def render_timekeeping_management():
         uploaded_file = st.file_uploader(
             "📤 Upload Tệp Bảng Chấm Công (.xlsx)",
             type=["xlsx", "xls"],
+            key="up_tk_file",
+        )
+
+    days_in_month = calendar.monthrange(selected_year, selected_month)[1]
+    tk_key = f"tk_{selected_unit}_{selected_month}_{selected_year}"
+    v_key = f"v_{tk_key}"
+
+    if v_key not in st.session_state:
+        st.session_state[v_key] = 0
+
+    if uploaded_file:
+        try:
+            df_up = pd.read_excel(uploaded_file, skiprows=4).fillna("")
+            for col in df_up.columns:
+                if "/" in str(col):
+                    df_up[col] = df_up[col].apply(clean_and_uppercase_code)
+            st.session_state[tk_key] = df_up
+            st.session_state[v_key] += 1
+            st.toast("✅ Đã tải lên thành công bảng chấm công!", icon="🎉")
+            st.success("✅ Đã cập nhật thành công bảng chấm công từ file Excel!")
+        except Exception as e:
+            st.error(f"Lỗi đọc file chấm công: {e}")
+
+    st.markdown("---")
+    st.write(
+        f"📋 **Bảng Chấm công Tháng {selected_month}/{selected_year} -"
+        f" {selected_unit}:**"
+    )
+
+    if tk_key in st.session_state:
+        df_tk_display = st.session_state[tk_key]
+    else:
+        date_cols_list = [
+            f"{d:02d}/{selected_month:02d}" for d in range(1, days_in_month + 1)
+        ]
+        cols = (
+            ["STT", "Mã NV", "Họ và tên", "Chức vụ"]
+            + date_cols_list
+            + [
+                "Tổng công (X)",
+                "Phép (P)",
+                "Ốm / CO",
+                "Công tác (CT)",
+                "Số ca trực (T)",
+                "Nghỉ khác",
+                "Tổng ngày nghỉ",
+            ]
+        )
+
+        if not df_unit_emp.empty and "Họ và tên" in df_unit_emp.columns:
+            data_rows = []
+            for idx, (_, r) in enumerate(df_unit_emp.iterrows(), start=1):
+                row_dict = {
+                    "STT": idx,
+                    "Mã NV": str(r.get("Mã NV") or "").strip(),
+                    "Họ và tên": str(r.get("Họ và tên") or "").strip(),
+                    "Chức vụ": str(r.get("Chức vụ") or "").strip(),
+                }
+                for d in range(1, days_in_month + 1):
+                    row_dict[f"{d:02d}/{selected_month:02d}"] = ""
+                data_rows.append(row_dict)
+            df_tk_display = pd.DataFrame(data_rows)
+        else:
+            df_tk_display = pd.DataFrame(columns=cols)
+
+    date_cols = [c for c in df_tk_display.columns if "/" in str(c)]
+
+    # 1. TỰ ĐỘNG CHUYỂN TOÀN BỘ KÝ TỰ THƯỜNG THÀNH IN HOA
+    for col in date_cols:
+        df_tk_display[col] = df_tk_display[col].apply(clean_and_uppercase_code)
+
+    # 2. TÍNH LẠI CÁC CỘT TỔNG HỢP CHI TIẾT
+    df_tk_display = calculate_summary_columns(df_tk_display, date_cols)
+
+    # 3. PHÁT HIỆN VÀ CẢNH BÁO KÝ TỰ LẠ NẾU UPLOAD FILE CHỨA DỮ LIỆU SAI
+    invalid_entries = []
+    valid_codes_set = set(VALID_OPTIONS)
+
+    for idx, row in df_tk_display.iterrows():
+        emp_name = str(row.get("Họ và tên") or f"Dòng {idx+1}").strip()
+        for col in date_cols:
+            val = str(row[col]).strip()
+            if val and val not in valid_codes_set:
+                invalid_entries.append(
+                    f"- **{emp_name}** (Ngày **{col}**): Ký tự lạ `{val}`"
+                )
+
+    if invalid_entries:
+        st.warning(
+            "⚠️ **CẢNH BÁO: PHÁT HIỆN KÝ TỰ CHẤM CÔNG LẠ KHÔNG ĐÚNG QUY"
+            " ĐỊNH!**\n"
+            + "\n".join(invalid_entries[:8])
+            + ("\n... và các ô khác." if len(invalid_entries) > 8 else "")
+            + "\n\n👉 *Ký hiệu chuẩn:* **X** (Công), **P** (Phép), **ÔM**"
+            " (Ốm), **CO** (Con ốm), **CT** (Công tác), **T** (Trực), **TS**"
+            " (Thai sản), **KL** (Không lương), **R** (Việc riêng), **H** (Học),"
+            " **F** (Lễ)."
+        )
+
+    # Định dạng màu sắc cột (Chủ Nhật = Xanh Dương, Thứ 7 = Cam, Lễ = Đỏ)
+    def highlight_days(col):
+        col_name = str(col.name)
+        if "/" in col_name:
+            try:
+                day_num = int(col_name.split("/")[0])
+                if is_vietnam_holiday(day_num, selected_month, selected_year):
+                    return [
+                        "background-color: #FADBD8; color: #78281F;"
+                        " font-weight: bold"
+                    ] * len(col)
+                dt = datetime(selected_year, selected_month, day_num)
+                if dt.weekday() == 6:
+                    return [
+                        "background-color: #D9E1F2; color: #1F497D;"
+                        " font-weight: bold"
+                    ] * len(col)
+                elif dt.weekday() == 5:
+                    return [
+                        "background-color: #FFF2CC; color: #9C6500"
+                    ] * len(col)
+            except Exception:
+                pass
+        elif any(
+            k in col_name
+            for k in [
+                "Tổng công",
+                "Phép",
+                "Ốm",
+                "Công tác",
+                "trực",
+                "khác",
+                "nghỉ",
+            ]
+        ):
+            return [
+                "background-color: #E2EFDA; color: #274E13; font-weight: bold"
+            ] * len(col)
+        return [""] * len(col)
+
+    styled_df = df_tk_display.style.apply(highlight_days, axis=0)
+
+    disabled_cols = [
+        "STT",
+        "Mã NV",
+        "Họ và tên",
+        "Chức vụ",
+        "Tổng công (X)",
+        "Phép (P)",
+        "Ốm / CO",
+        "Công tác (CT)",
+        "Số ca trực (T)",
+        "Nghỉ khác",
+        "Tổng ngày nghỉ",
+    ]
+
+    # CẤU HÌNH SELECTBOX CHỌN KÝ HIỆU CHUẨN CHO TẤT CẢ CỘT NGÀY
+    column_config = {}
+    for col in date_cols:
+        column_config[col] = st.column_config.SelectboxColumn(
+            label=col,
+            options=VALID_OPTIONS,
+            help="Chọn ký hiệu chấm công chuẩn",
+            width="small",
+            required=False,
+        )
+
+    # BẢNG HIỂN THỊ STREAMLIT DATA EDITOR
+    edited_tk = st.data_editor(
+        styled_df,
+        use_container_width=True,
+        num_rows="dynamic",
+        column_config=column_config,
+        disabled=[c for c in disabled_cols if c in df_tk_display.columns],
+        key=f"editor_{tk_key}_{st.session_state[v_key]}",
+    )
+
+    # TỰ ĐỘNG CHUYỂN IN HOA VÀ LÀM MỚI BẢNG
+    need_refresh = False
+    for col in date_cols:
+        if col in edited_tk.columns:
+            converted_series = edited_tk[col].apply(clean_and_uppercase_code)
+            if not converted_series.equals(edited_tk[col]):
+                edited_tk[col] = converted_series
+                need_refresh = True
+
+    if need_refresh:
+        edited_tk = calculate_summary_columns(edited_tk, date_cols)
+        st.session_state[tk_key] = edited_tk
+        st.session_state[v_key] += 1
+        st.rerun()
+
+    if st.button("💾 Lưu Bảng Chấm Công", type="primary"):
+        for col in date_cols:
+            if col in edited_tk.columns:
+                edited_tk[col] = edited_tk[col].apply(clean_and_uppercase_code)
+
+        edited_tk = calculate_summary_columns(edited_tk, date_cols)
+        st.session_state[tk_key] = edited_tk
+        st.toast(
+            "✅ Đã lưu và cập nhật tổng hợp dữ liệu chấm công thành công!",
+            icon="💾",
+        )
+        st.success("✅ Đã lưu thành công dữ liệu chấm công!")
