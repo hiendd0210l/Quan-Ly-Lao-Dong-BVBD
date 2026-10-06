@@ -31,45 +31,75 @@ def init_supabase():
 
 
 # ---------------------------------------------------------
-# 2. BỘ KIỂM TRA NGÀY LỄ NGHỈ CHÍNH THỨC (VIỆT NAM)
+# 2. KIỂM TRA NGÀY LỄ VIỆT NAM (01/09, 02/09, 30/04, 01/05, TẾT...)
 # ---------------------------------------------------------
 def is_vietnam_holiday(day, month, year=2026):
-    """Kiểm tra ngày lễ cố định và các ngày nghỉ lễ đặc thù trong năm"""
-    # Các ngày lễ cố định hàng năm (Dương lịch)
+    """Xác định các ngày nghỉ lễ chính thức theo quy định"""
+    # Các ngày lễ cố định hàng năm
     fixed_holidays = [
         (1, 1),   # Tết Dương lịch
-        (30, 4),  # Ngày Giải phóng miền Nam
-        (1, 5),   # Quốc tế Lao động
-        (1, 9),   # Nghỉ Quốc Khánh (Ngày liền kề)
-        (2, 9),   # Quốc Khánh
+        (30, 4),  # 30/4 Giải phóng miền Nam
+        (1, 5),   # 1/5 Quốc tế Lao động
+        (1, 9),   # 1/9 Nghỉ Quốc khánh
+        (2, 9),   # 2/9 Quốc khánh
     ]
     if (day, month) in fixed_holidays:
         return True
 
-    # Các ngày nghỉ lễ lịch âm/đặc thù cho năm 2026
+    # Ngày lễ âm lịch / nghỉ bù năm 2026
     if year == 2026:
-        lunar_new_year_2026 = [(16, 2), (17, 2), (18, 2), (19, 2), (20, 2), (21, 2)] # Tết Nguyên Đán
-        hung_kings_2026 = [(26, 4)] # Giỗ Tổ Hùng Vương (10/3 âm lịch)
-        if (day, month) in lunar_new_year_2026 or (day, month) in hung_kings_2026:
+        lunar_holidays = [(16, 2), (17, 2), (18, 2), (19, 2), (20, 2), (21, 2), (26, 4)]
+        if (day, month) in lunar_holidays:
             return True
 
     return False
 
 
 # ---------------------------------------------------------
-# 3. TRUY VẤN VÀ LỌC LẠI CHÍNH XÁC DANH SÁCH CÁN BỘ THEO ĐƠN VỊ
+# 3. LẤY DANH SÁCH ĐƠN VỊ TỪ MENU 2 ("DANH MỤC HỆ THỐNG")
 # ---------------------------------------------------------
-def get_employees_by_unit(unit_name):
-    """Lấy đúng danh sách cán bộ (Mã NV, Họ tên, Chức vụ) thuộc Đơn vị được chọn"""
+def load_system_units(supabase_client):
+    """Đọc động danh sách Đơn vị từ mục 'Danh mục Hệ thống' (cat_key = don_vi)"""
+    units = []
+
+    if supabase_client:
+        try:
+            res = (
+                supabase_client.table("categories")
+                .select("content")
+                .eq("cat_key", "don_vi")
+                .execute()
+            )
+            if res.data and res.data[0].get("content"):
+                df_dv = pd.DataFrame(res.data[0]["content"])
+                for col in ["Tên đơn vị", "Tên Đơn vị", "Tên khoa / phòng", "Tên Khoa / Phòng", "Đơn vị", "Tên phòng ban"]:
+                    if col in df_dv.columns:
+                        units = [str(x).strip() for x in df_dv[col].dropna().tolist() if str(x).strip()]
+                        if units:
+                            break
+        except Exception:
+            pass
+
+    if not units:
+        units = ["Ban Giám đốc", "Khoa Cấp cứu", "Khoa Ngoại Tổng hợp", "Phòng Nhân sự - Tổng hợp", "Phòng Tài chính - Kế toán"]
+
+    return units
+
+
+# ---------------------------------------------------------
+# 4. LỌC CHÍNH XÁC NHÂN SỰ THEO ĐƠN VỊ (LOẠI BỎ TÊN ĐƠN VỊ BỊ LẪN)
+# ---------------------------------------------------------
+def get_employees_by_unit(unit_name, all_units):
+    """Lấy danh sách cán bộ thực sự thuộc Đơn vị chọn, loại bỏ hoàn toàn tên các phòng ban"""
     df_emp = pd.DataFrame()
 
-    # 1. Lấy từ session_state nếu có
+    # 1. Lấy từ session_state
     if "employees_profile" in st.session_state:
         df_ses = st.session_state["employees_profile"]
         if isinstance(df_ses, pd.DataFrame) and not df_ses.empty:
             df_emp = df_ses.copy()
 
-    # 2. Nếu chưa có trong session, lấy từ Supabase bảng categories (cat_key = employees_profile)
+    # 2. Lấy từ Supabase
     if df_emp.empty:
         supabase = init_supabase()
         if supabase:
@@ -88,7 +118,7 @@ def get_employees_by_unit(unit_name):
     if df_emp.empty:
         return pd.DataFrame(columns=["Mã NV", "Họ và tên", "Chức vụ", "Đơn vị"])
 
-    # 3. Chuẩn hóa tên các cột thông tin cán bộ
+    # 3. Chuẩn hóa tên cột
     col_mapping = {}
     for col in df_emp.columns:
         c_str = str(col).strip().lower()
@@ -106,20 +136,26 @@ def get_employees_by_unit(unit_name):
     if "Họ và tên" not in df_emp.columns:
         return pd.DataFrame(columns=["Mã NV", "Họ và tên", "Chức vụ", "Đơn vị"])
 
-    # 4. LỌC LOẠI BỎ TRIỆT ĐỂ TÊN PHÒNG BAN/ĐƠN VỊ BỊ NHẦM VÀO CỘT HỌ VÀ TÊN
-    dept_prefixes = ["Phòng ", "Khoa ", "Ban ", "Tổ "]
-    def is_valid_person_name(val):
-        v_str = str(val).strip()
-        if not v_str or v_str.lower() in ["nan", "none"]:
+    # 4. LỌC LOẠI BỎ TRIỆT ĐỂ BẤT KỲ DÒNG NÀO LÀ TÊN ĐƠN VỊ / PHÒNG BAN
+    unit_set_lower = set(u.lower() for u in all_units)
+    dept_keywords = ["phòng ", "khoa ", "ban ", "tổ ", "trung tâm "]
+
+    def is_real_person(row):
+        name = str(row.get("Họ và tên", "")).strip()
+        if not name or name.lower() in ["nan", "none"]:
             return False
-        for prefix in dept_prefixes:
-            if v_str.startswith(prefix):
+        # Nếu trùng đúng tên đơn vị trong danh mục
+        if name.lower() in unit_set_lower:
+            return False
+        # Nếu bắt đầu bằng tiền tố phòng ban
+        for kw in dept_keywords:
+            if name.lower().startswith(kw) and name.lower() != "ban giám đốc":
                 return False
         return True
 
-    df_emp = df_emp[df_emp["Họ và tên"].apply(is_valid_person_name)].copy()
+    df_emp = df_emp[df_emp.apply(is_real_person, axis=1)].copy()
 
-    # 5. Lọc theo tên đơn vị được chọn
+    # 5. Lọc theo đơn vị chọn
     if unit_name and unit_name != "Tất cả" and "Đơn vị" in df_emp.columns:
         target_unit = str(unit_name).strip().lower()
 
@@ -134,7 +170,7 @@ def get_employees_by_unit(unit_name):
 
 
 # ---------------------------------------------------------
-# 4. TẠO FILE EXCEL MẪU CHẤM CÔNG CÓ TÔ MÀU NGÀY LỄ VÀ THỨ 7, CHỦ NHẬT
+# 5. TẠO FILE EXCEL MẪU TÔ MÀU NGHỈ LỄ & THỨ 7, CHỦ NHẬT
 # ---------------------------------------------------------
 def generate_timekeeping_excel(unit_name, month, year, df_employees):
     wb = openpyxl.Workbook()
@@ -165,7 +201,7 @@ def generate_timekeeping_excel(unit_name, month, year, df_employees):
 
     all_headers = headers + date_cols + summary_headers
 
-    # Dòng Tiêu đề cột (Dòng 5)
+    # Tiêu đề cột (Dòng 5)
     for col_idx, h_text in enumerate(all_headers, start=1):
         cell = ws.cell(row=5, column=col_idx, value=h_text)
         cell.font = Font(name="Arial", size=9, bold=True, color="FFFFFF")
@@ -175,7 +211,7 @@ def generate_timekeeping_excel(unit_name, month, year, df_employees):
         if 5 <= col_idx <= 4 + days_in_month:
             d = col_idx - 4
             if is_vietnam_holiday(d, month, year):
-                fill_color = "C00000"  # Màu Đỏ cho Ngày Lễ
+                fill_color = "C00000"  # Đỏ rực cho Ngày Lễ
             else:
                 dt = datetime(year, month, d)
                 if dt.weekday() == 6:  # Chủ Nhật
@@ -206,13 +242,12 @@ def generate_timekeeping_excel(unit_name, month, year, df_employees):
 
         max_row = start_row + len(df_employees) - 1
     else:
-        # Nếu chưa có cán bộ thuộc đơn vị này, tạo 10 dòng trống để tự nhập
         max_row = start_row + 9
         for idx in range(1, 10):
             r = start_row + idx - 1
             ws.cell(row=r, column=1, value=idx)
 
-    # Tô màu Ngày Lễ, Thứ 7, Chủ Nhật & Viền
+    # Viền và Tô màu nền Ngày Lễ / Thứ 7 / Chủ Nhật
     thin_border = Border(
         left=Side(style="thin", color="D9D9D9"),
         right=Side(style="thin", color="D9D9D9"),
@@ -220,9 +255,9 @@ def generate_timekeeping_excel(unit_name, month, year, df_employees):
         bottom=Side(style="thin", color="D9D9D9"),
     )
 
-    holiday_fill = PatternFill(start_color="FADBD8", end_color="FADBD8", fill_type="solid") # Nền Đỏ/Hồng nhạt cho Ngày Lễ
-    sun_fill = PatternFill(start_color="FCE4D6", end_color="FCE4D6", fill_type="solid")     # Nền Cam nhạt cho Chủ Nhật
-    sat_fill = PatternFill(start_color="FFF2CC", end_color="FFF2CC", fill_type="solid")     # Nền Vàng nhạt cho Thứ 7
+    holiday_fill = PatternFill(start_color="FADBD8", end_color="FADBD8", fill_type="solid") # Hồng đỏ nhạt cho Ngày Lễ
+    sun_fill = PatternFill(start_color="FCE4D6", end_color="FCE4D6", fill_type="solid")     # Cam nhạt cho Chủ Nhật
+    sat_fill = PatternFill(start_color="FFF2CC", end_color="FFF2CC", fill_type="solid")     # Vàng nhạt cho Thứ 7
 
     for r in range(6, max_row + 1):
         for c in range(1, last_col_idx + 1):
@@ -234,9 +269,7 @@ def generate_timekeeping_excel(unit_name, month, year, df_employees):
                 cell.alignment = Alignment(horizontal="center", vertical="center")
                 d = c - 4
                 if is_vietnam_holiday(d, month, year):
-                    cell.fill = holiday_fill
-                    if not cell.value:
-                        cell.value = "Lễ"  # Gợi ý ký hiệu ngày lễ
+                    cell.fill = holiday_fill  # Tô màu nền hồng đỏ cho Ngày Lễ
                 else:
                     dt = datetime(year, month, d)
                     if dt.weekday() == 6:
@@ -263,7 +296,7 @@ def generate_timekeeping_excel(unit_name, month, year, df_employees):
 
 
 # ---------------------------------------------------------
-# 5. GIAO DIỆN CHẤM CÔNG
+# 6. GIAO DIỆN PHÂN HỆ CHẤM CÔNG
 # ---------------------------------------------------------
 def render_timekeeping_management():
     st.markdown(
@@ -273,26 +306,8 @@ def render_timekeeping_management():
 
     supabase = init_supabase()
 
-    # Lấy danh sách Đơn vị từ CSDL
-    don_vi_list = ["Ban Giám đốc", "Khoa Cấp cứu", "Khoa Ngoại Tổng hợp"]
-    if supabase:
-        try:
-            res = (
-                supabase.table("categories")
-                .select("content")
-                .eq("cat_key", "don_vi")
-                .execute()
-            )
-            if res.data and res.data[0].get("content"):
-                df_dv = pd.DataFrame(res.data[0]["content"])
-                for col in ["Tên đơn vị", "Tên Đơn vị", "Đơn vị", "Tên khoa / phòng"]:
-                    if col in df_dv.columns:
-                        fetched = [str(x).strip() for x in df_dv[col].tolist() if str(x).strip()]
-                        if fetched:
-                            don_vi_list = fetched
-                            break
-        except Exception:
-            pass
+    # 1. Đọc liên kết danh sách Đơn vị từ mục "Danh mục Hệ thống"
+    all_units = load_system_units(supabase)
 
     col_f1, col_f2, col_f3 = st.columns([2, 2, 4])
     with col_f1:
@@ -300,10 +315,10 @@ def render_timekeeping_management():
     with col_f2:
         selected_year = st.selectbox("Chọn Năm:", [2025, 2026, 2027], index=1)
     with col_f3:
-        selected_unit = st.selectbox("Chọn Đơn vị / Khoa / Phòng:", don_vi_list)
+        selected_unit = st.selectbox("Chọn Đơn vị / Khoa / Phòng:", all_units)
 
-    # Truy vấn cán bộ thực tế của đơn vị được chọn
-    df_unit_emp = get_employees_by_unit(selected_unit)
+    # 2. Truy vấn danh sách cán bộ thực sự của đơn vị chọn
+    df_unit_emp = get_employees_by_unit(selected_unit, all_units)
 
     st.markdown("---")
     col_act1, col_act2 = st.columns([3, 4])
@@ -361,12 +376,9 @@ def render_timekeeping_management():
                     "Họ và tên": str(r.get("Họ và tên") or r.get("Họ tên") or "").strip(),
                     "Chức vụ": str(r.get("Chức vụ") or r.get("Chức danh") or "").strip(),
                 }
+                # MẶC ĐỊNH ĐỂ TRỐNG Ô CHẤM CÔNG (KHÔNG TỰ Ý ĐIỀN CHỮ X VÔ NGHĨA)
                 for d in range(1, days_in_month + 1):
-                    # Tự động điền ký hiệu ngày lễ cho các ngày lễ chính thức
-                    if is_vietnam_holiday(d, selected_month, selected_year):
-                        row_dict[f"{d:02d}/{selected_month:02d}"] = "Lễ"
-                    else:
-                        row_dict[f"{d:02d}/{selected_month:02d}"] = "X"
+                    row_dict[f"{d:02d}/{selected_month:02d}"] = ""
                 data_rows.append(row_dict)
             df_tk_display = pd.DataFrame(data_rows)
         else:
@@ -376,13 +388,13 @@ def render_timekeeping_management():
                 f"Bạn có thể thêm dòng trực tiếp trên bảng bên dưới hoặc nhập danh sách tại mục **4. Quản lý Hồ sơ Cán bộ**."
             )
 
-    # Tô màu Ngày Lễ, Thứ 7, Chủ Nhật trên bảng giao diện
+    # Tô màu Nền Ngày Lễ, Thứ 7, Chủ Nhật trên bảng giao diện Streamlit
     def highlight_days(col):
         col_name = str(col.name)
         if "/" in col_name:
             try:
                 day_num = int(col_name.split("/")[0])
-                # Tô màu Ngày Lễ
+                # Tô màu Nền Ngày Lễ (như 01/09, 02/09)
                 if is_vietnam_holiday(day_num, selected_month, selected_year):
                     return [
                         "background-color: #FADBD8; color: #78281F; font-weight: bold"
