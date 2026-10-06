@@ -3,7 +3,7 @@ import pandas as pd
 import streamlit as st
 from supabase import create_client
 
-# 1. DANH SÁCH THỨ TỰ CỘT CHUẨN THEO MẪU SƠ YẾU LÝ LỊCH BỘ NỘI VỤ / EXCEL UPLOAD
+# DANH SÁCH THỨ TỰ CỘT CHUẨN THEO MẪU SƠ YẾU LÝ LỊCH BỘ NỘI VỤ / EXCEL UPLOAD
 STANDARD_COLUMN_ORDER = [
     "Mã NV",
     "Mã VNPT",
@@ -57,20 +57,34 @@ def reorder_columns(df, custom_order=None):
     if df.empty:
         return df
 
-    # Lấy thứ tự cột lưu từ file upload trong session_state (nếu có), hoặc dùng STANDARD_COLUMN_ORDER
     order = custom_order or st.session_state.get(
         "employee_columns_order", STANDARD_COLUMN_ORDER
     )
-
     existing_cols = df.columns.tolist()
 
-    # Giữ đúng thứ tự các cột có trong danh sách order
     ordered_cols = [c for c in order if c in existing_cols]
-
-    # Giữ các cột phát sinh thêm (nếu có) vào cuối bảng
     extra_cols = [c for c in existing_cols if c not in ordered_cols]
 
     return df[ordered_cols + extra_cols]
+
+
+def clean_dataframe_for_json(df):
+    """Xử lý và chuyển đổi tất cả kiểu dữ liệu datetime/Timestamp sang chuỗi string để gửi JSON lên CSDL"""
+    df_clean = df.copy()
+    for col in df_clean.columns:
+        if pd.api.types.is_datetime64_any_dtype(df_clean[col]):
+            df_clean[col] = (
+                df_clean[col].dt.strftime("%d/%m/%Y").fillna("").astype(str)
+            )
+        else:
+            df_clean[col] = (
+                df_clean[col]
+                .astype(str)
+                .str.replace(" 00:00:00", "", regex=False)
+                .str.replace("NaT", "", regex=False)
+                .str.replace("nan", "", regex=False)
+            )
+    return df_clean
 
 
 def load_employees_data(supabase_client):
@@ -148,7 +162,10 @@ def render_employee_management():
         try:
             df_uploaded = pd.read_excel(uploaded_emp_file).fillna("")
 
-            # Ghi nhớ lại nguyên bản thứ tự các cột từ file Excel upload
+            # Chuyển đổi các cột kiểu datetime sang chuỗi văn bản trước khi đẩy lên JSON
+            df_uploaded = clean_dataframe_for_json(df_uploaded)
+
+            # Ghi nhớ lại thứ tự cột gốc của file Excel
             uploaded_cols = df_uploaded.columns.tolist()
             st.session_state["employee_columns_order"] = uploaded_cols
 
@@ -162,20 +179,19 @@ def render_employee_management():
                 }).execute()
 
             st.success(
-                f"✅ Đã tải lên và sắp xếp chuẩn {len(df_uploaded)} hồ sơ theo"
-                " đúng thứ tự cột trong file Excel mẫu!"
+                f"✅ Đã tải lên và lưu thành công {len(df_uploaded)} hồ sơ cán"
+                " bộ!"
             )
             st.rerun()
         except Exception as e:
-            st.error(f"Lỗi khi đọc file Excel: {e}")
+            st.error(f"Lỗi khi xử lý file Excel: {e}")
 
     st.markdown("---")
     st.write(
-        "📋 **Danh sách Hồ sơ Cán bộ hiện tại (Đã hiển thị đúng theo thứ tự"
-        " cột tệp Excel):**"
+        "📋 **Danh sách Hồ sơ Cán bộ hiện tại (Hiển thị đúng theo thứ tự cột"
+        " tệp Excel):**"
     )
 
-    # Đảm bảo thứ tự cột trước khi đẩy vào bảng Data Editor
     df_display = reorder_columns(df_emp_current)
 
     edited_employees = st.data_editor(
@@ -186,20 +202,20 @@ def render_employee_management():
     )
 
     if st.button("💾 Lưu thay đổi Hồ sơ Cán bộ vào CSDL", type="primary"):
-        st.session_state["employees_profile"] = edited_employees
+        # Chuẩn hóa dữ liệu trước khi chuyển thành JSON lưu CSDL
+        edited_clean = clean_dataframe_for_json(edited_employees)
+        st.session_state["employees_profile"] = edited_clean
+
         if supabase:
             try:
                 supabase.table("categories").upsert({
                     "cat_key": "employees_profile",
                     "title": "Hồ sơ Cán bộ Nhân viên",
-                    "content": edited_employees.to_dict(orient="records"),
+                    "content": edited_clean.to_dict(orient="records"),
                 }).execute()
-                st.success(
-                    "✅ Đã lưu vĩnh viễn danh sách hồ sơ cán bộ vào CSDL theo"
-                    " đúng cấu trúc cột!"
-                )
+                st.success("✅ Đã lưu vĩnh viễn dữ liệu hồ sơ cán bộ vào CSDL!")
                 st.rerun()
             except Exception as e:
                 st.error(f"Lỗi khi lưu CSDL: {e}")
         else:
-            st.success("✅ Đã cập nhật dữ liệu vào phiên làm việc thành công!")
+            st.success("✅ Đã cập nhật dữ liệu thành công!")
