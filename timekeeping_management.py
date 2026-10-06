@@ -91,7 +91,7 @@ def normalize_str(s):
 
 
 def clean_and_uppercase_code(val):
-    """Tự động chuyển chữ thường sang in hoa & chuẩn hóa ký hiệu chấm công"""
+    """Tự động chuyển chữ thường sang IN HOA & chuẩn hóa ký hiệu chấm công"""
     if pd.isna(val) or val is None:
         return ""
     v_str = str(val).strip().upper()
@@ -402,7 +402,6 @@ def generate_timekeeping_excel(unit_name, month, year, df_employees):
     first_d_letter = get_column_letter(5)
     last_d_letter = get_column_letter(4 + days_in_month)
 
-    # Điền cán bộ & công thức tổng hợp tự động vào Excel
     for idx in range(1, (len(df_employees) if not df_employees.empty else 9) + 1):
         r = start_row + idx - 1
         if not df_employees.empty and idx <= len(df_employees):
@@ -423,7 +422,7 @@ def generate_timekeeping_excel(unit_name, month, year, df_employees):
         ws.cell(row=r, column=3).alignment = Alignment(horizontal="left")
         ws.cell(row=r, column=4).alignment = Alignment(horizontal="left")
 
-        # CÔNG THỨC EXCEL TỰ ĐỘNG CHO CÁC CỘT TỔNG HỢP CHI TIẾT
+        # CÔNG THỨC EXCEL TỰ ĐỘNG
         c_base = 5 + days_in_month
         ws.cell(
             row=r,
@@ -465,7 +464,6 @@ def generate_timekeeping_excel(unit_name, month, year, df_employees):
             value=f"={p_col_let}{r}+{om_col_let}{r}+{nk_col_let}{r}",
         )
 
-    # Tô màu Nền Ngày Lễ, Thứ 7, Chủ Nhật (Chủ Nhật = XANH DƯƠNG NHẠT #D9E1F2)
     thin_border = Border(
         left=Side(style="thin", color="D9D9D9"),
         right=Side(style="thin", color="D9D9D9"),
@@ -572,15 +570,21 @@ def render_timekeeping_management():
             key="up_tk_file",
         )
 
+    days_in_month = calendar.monthrange(selected_year, selected_month)[1]
+    tk_key = f"tk_{selected_unit}_{selected_month}_{selected_year}"
+    v_key = f"v_{tk_key}"
+
+    if v_key not in st.session_state:
+        st.session_state[v_key] = 0
+
     if uploaded_file:
         try:
             df_up = pd.read_excel(uploaded_file, skiprows=4).fillna("")
             for col in df_up.columns:
                 if "/" in str(col):
                     df_up[col] = df_up[col].apply(clean_and_uppercase_code)
-            st.session_state[
-                f"tk_{selected_unit}_{selected_month}_{selected_year}"
-            ] = df_up
+            st.session_state[tk_key] = df_up
+            st.session_state[v_key] += 1
             st.toast("✅ Đã tải lên thành công bảng chấm công!", icon="🎉")
             st.success("✅ Đã cập nhật thành công bảng chấm công từ file Excel!")
         except Exception as e:
@@ -591,9 +595,6 @@ def render_timekeeping_management():
         f"📋 **Bảng Chấm công Tháng {selected_month}/{selected_year} -"
         f" {selected_unit}:**"
     )
-
-    days_in_month = calendar.monthrange(selected_year, selected_month)[1]
-    tk_key = f"tk_{selected_unit}_{selected_month}_{selected_year}"
 
     if tk_key in st.session_state:
         df_tk_display = st.session_state[tk_key]
@@ -630,20 +631,14 @@ def render_timekeeping_management():
             df_tk_display = pd.DataFrame(data_rows)
         else:
             df_tk_display = pd.DataFrame(columns=cols)
-            st.info(
-                f"ℹ️ Đơn vị **{selected_unit}** hiện chưa có hồ sơ cán bộ đăng"
-                " ký trong hệ thống. Bạn có thể thêm dòng trực tiếp trên bảng"
-                " bên dưới hoặc nhập danh sách tại mục **4. Quản lý Hồ sơ Cán"
-                " bộ**."
-            )
 
     date_cols = [c for c in df_tk_display.columns if "/" in str(c)]
 
-    # 1. TỰ ĐỘNG CHUYỂN TOÀN BỘ KÝ HIỆU SANG CHỮ IN HOA
+    # 1. TỰ ĐỘNG CHUYỂN IN HOA TOÀN BỘ KÝ HIỆU TRƯỚC KHU HÌNH THỨC
     for col in date_cols:
         df_tk_display[col] = df_tk_display[col].apply(clean_and_uppercase_code)
 
-    # 2. TÍNH LẠI CÁC CỘT TỔNG HỢP CHI TIẾT BÊN PHẢI
+    # 2. TÍNH LẠI CÁC CỘT TỔNG HỢP CHI TIẾT
     df_tk_display = calculate_summary_columns(df_tk_display, date_cols)
 
     # 3. PHÁT HIỆN VÀ CẢNH BÁO KÝ TỰ LẠ
@@ -712,7 +707,6 @@ def render_timekeeping_management():
 
     styled_df = df_tk_display.style.apply(highlight_days, axis=0)
 
-    # Disable không cho sửa trực tiếp các cột Tổng hợp
     disabled_cols = [
         "STT",
         "Mã NV",
@@ -727,16 +721,31 @@ def render_timekeeping_management():
         "Tổng ngày nghỉ",
     ]
 
+    # HIỂN THỊ BẢNG ĐIỀU CHỈNH VỚI DYNAMIC VERSION KEY TỰ ĐỘNG CHUYỂN CHỮ HOA TỨC THÌ
     edited_tk = st.data_editor(
         styled_df,
         use_container_width=True,
         num_rows="dynamic",
         disabled=[c for c in disabled_cols if c in df_tk_display.columns],
-        key=f"editor_{tk_key}",
+        key=f"editor_{tk_key}_{st.session_state[v_key]}",
     )
 
+    # TỰ ĐỘNG BẮT VÀ ĐỔI CHỮ THƯỜNG THÀNH CHỮ IN HOA NGAY KHI NGƯỜI DÙNG GÕ XONG
+    need_refresh = False
+    for col in date_cols:
+        if col in edited_tk.columns:
+            converted_series = edited_tk[col].apply(clean_and_uppercase_code)
+            if not converted_series.equals(edited_tk[col]):
+                edited_tk[col] = converted_series
+                need_refresh = True
+
+    if need_refresh:
+        edited_tk = calculate_summary_columns(edited_tk, date_cols)
+        st.session_state[tk_key] = edited_tk
+        st.session_state[v_key] += 1
+        st.rerun()
+
     if st.button("💾 Lưu Bảng Chấm Công", type="primary"):
-        # CHUẨN HÓA LẠI TRƯỚC KHI LƯU DỮ LIỆU
         for col in date_cols:
             if col in edited_tk.columns:
                 edited_tk[col] = edited_tk[col].apply(clean_and_uppercase_code)
