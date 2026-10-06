@@ -9,7 +9,7 @@ import pandas as pd
 import streamlit as st
 from supabase import create_client
 
-# Danh sách ký hiệu chấm công hợp lệ & bản đồ chuẩn hóa chữ thường -> chữ in hoa
+# Map chuẩn hóa ký hiệu chấm công (kể cả chữ thường và ký tự viết tắt)
 VALID_CODES_MAP = {
     "X": "X",
     "1": "X",
@@ -67,14 +67,7 @@ def init_supabase():
 # 2. KIỂM TRA NGÀY LỄ VIỆT NAM & CHUẨN HÓA CHUỖI
 # ---------------------------------------------------------
 def is_vietnam_holiday(day, month, year=2026):
-    """Xác định các ngày nghỉ lễ chính thức theo quy định"""
-    fixed_holidays = [
-        (1, 1),  # Tết Dương lịch
-        (30, 4),  # 30/4 Giải phóng miền Nam
-        (1, 5),  # 1/5 Quốc tế Lao động
-        (1, 9),  # 1/9 Nghỉ Quốc khánh
-        (2, 9),  # 2/9 Quốc khánh
-    ]
+    fixed_holidays = [(1, 1), (30, 4), (1, 5), (1, 9), (2, 9)]
     if (day, month) in fixed_holidays:
         return True
 
@@ -95,7 +88,6 @@ def is_vietnam_holiday(day, month, year=2026):
 
 
 def normalize_str(s):
-    """Chuẩn hóa chuỗi ký tự để so sánh đơn vị chính xác 100%"""
     if pd.isna(s) or s is None:
         return ""
     s_str = str(s).strip()
@@ -105,7 +97,6 @@ def normalize_str(s):
 
 
 def clean_and_uppercase_code(val):
-    """Tự động chuyển chữ thường sang IN HOA & chuẩn hóa ký hiệu chấm công"""
     if pd.isna(val) or val is None:
         return ""
     v_str = str(val).strip()
@@ -118,7 +109,6 @@ def clean_and_uppercase_code(val):
 # 3. QUÉT TỰ ĐỘNG DANH SÁCH ĐƠN VỊ TỪ CSDL
 # ---------------------------------------------------------
 def load_system_units(supabase_client):
-    """Gom toàn bộ Đơn vị khai báo từ 'Danh mục Hệ thống' VÀ 'Hồ sơ Cán bộ'"""
     units_set = set()
 
     if supabase_client:
@@ -182,6 +172,7 @@ def load_system_units(supabase_client):
         return [
             "Ban Giám đốc",
             "Khoa Cấp cứu",
+            "Khoa Mắt",
             "Khoa Ngoại Tổng hợp",
             "Phòng Điều dưỡng",
             "Phòng Nhân sự - Tổng hợp",
@@ -195,7 +186,6 @@ def load_system_units(supabase_client):
 # 4. LỌC CHÍNH XÁC CÁN BỘ THEO ĐƠN VỊ
 # ---------------------------------------------------------
 def get_employees_by_unit(unit_name, all_units):
-    """Chỉ lấy đúng cán bộ thuộc đơn vị chọn, chặn hoàn toàn ô đơn vị rỗng"""
     df_emp = pd.DataFrame()
 
     if "employees_profile" in st.session_state:
@@ -310,8 +300,6 @@ def get_employees_by_unit(unit_name, all_units):
 # 5. TÍNH TOÁN BÁO CÁO CỘT TỔNG HỢP CHO DỮ LIỆU
 # ---------------------------------------------------------
 def calculate_summary_columns(df, date_cols):
-    """Tự động tính các cột tổng hợp chi tiết hàng tháng cho từng nhân sự"""
-
     def calc_row(row):
         codes = [
             clean_and_uppercase_code(row[c]) for c in date_cols if c in row
@@ -343,7 +331,7 @@ def calculate_summary_columns(df, date_cols):
 
 
 # ---------------------------------------------------------
-# 6. TẠO FILE EXCEL TÍCH HỢP 2 SHEET & DATA VALIDATION DROPDOWN
+# 6. TẠO FILE EXCEL 2 SHEET TÍCH HỢP DATA VALIDATION LIÊN KẾT
 # ---------------------------------------------------------
 def generate_timekeeping_excel(unit_name, month, year, df_employees):
     wb = openpyxl.Workbook()
@@ -470,4 +458,87 @@ def generate_timekeeping_excel(unit_name, month, year, df_employees):
         ws.cell(
             row=r,
             column=c_base + 5,
-            value=f'=COUNTIF({first_d_letter}{r}:{last_d_letter}{r}, "TS") + COUNTIF({first_
+            value=f'=COUNTIF({first_d_letter}{r}:{last_d_letter}{r}, "TS") + COUNTIF({first_d_letter}{r}:{last_d_letter}{r}, "KL") + COUNTIF({first_d_letter}{r}:{last_d_letter}{r}, "R")',
+        )
+
+        p_col_let = get_column_letter(c_base + 1)
+        om_col_let = get_column_letter(c_base + 2)
+        nk_col_let = get_column_letter(c_base + 5)
+        ws.cell(
+            row=r,
+            column=c_base + 6,
+            value=f"={p_col_let}{r}+{om_col_let}{r}+{nk_col_let}{r}",
+        )
+
+    thin_border = Border(
+        left=Side(style="thin", color="D9D9D9"),
+        right=Side(style="thin", color="D9D9D9"),
+        top=Side(style="thin", color="D9D9D9"),
+        bottom=Side(style="thin", color="D9D9D9"),
+    )
+
+    holiday_fill = PatternFill(
+        start_color="FADBD8", end_color="FADBD8", fill_type="solid"
+    )
+    sun_fill = PatternFill(
+        start_color="D9E1F2", end_color="D9E1F2", fill_type="solid"
+    )
+    sat_fill = PatternFill(
+        start_color="FFF2CC", end_color="FFF2CC", fill_type="solid"
+    )
+    summary_fill = PatternFill(
+        start_color="E2EFDA", end_color="E2EFDA", fill_type="solid"
+    )
+
+    for r in range(6, max_row + 1):
+        for c in range(1, last_col_idx + 1):
+            cell = ws.cell(row=r, column=c)
+            cell.border = thin_border
+            cell.font = Font(name="Arial", size=9)
+
+            if 5 <= c <= 4 + days_in_month:
+                cell.alignment = Alignment(horizontal="center", vertical="center")
+                d = c - 4
+                if is_vietnam_holiday(d, month, year):
+                    cell.fill = holiday_fill
+                else:
+                    dt = datetime(year, month, d)
+                    if dt.weekday() == 6:
+                        cell.fill = sun_fill
+                    elif dt.weekday() == 5:
+                        cell.fill = sat_fill
+            elif c > 4 + days_in_month:
+                cell.alignment = Alignment(horizontal="center", vertical="center")
+                cell.fill = summary_fill
+                cell.font = Font(name="Arial", size=9, bold=True)
+
+    ws.column_dimensions["A"].width = 6
+    ws.column_dimensions["B"].width = 14
+    ws.column_dimensions["C"].width = 25
+    ws.column_dimensions["D"].width = 20
+    for c in range(5, 5 + days_in_month):
+        ws.column_dimensions[get_column_letter(c)].width = 7
+    for c in range(5 + days_in_month, last_col_idx + 1):
+        ws.column_dimensions[get_column_letter(c)].width = 13
+
+    # ---------------------------------------------------------
+    # SHEET 2: QUY ƯỚC CÁC KÝ HIỆU CHẤM CÔNG (TẠO TRƯỚC ĐỂ THAM CHIẾU)
+    # ---------------------------------------------------------
+    rules_sheet_name = "Quy ước ký hiệu"
+    ws_rules = wb.create_sheet(title=rules_sheet_name)
+
+    ws_rules.merge_cells("A1:C1")
+    ws_rules["A1"] = "QUY ƯỚC CÁC KÝ HIỆU CHẤM CÔNG CHUẨN"
+    ws_rules["A1"].font = Font(name="Arial", size=12, bold=True, color="002060")
+    ws_rules["A1"].alignment = Alignment(horizontal="center", vertical="center")
+
+    rule_headers = ["STT", "Ký hiệu", "Diễn giải / Ý nghĩa chi tiết"]
+    for col_i, h_t in enumerate(rule_headers, start=1):
+        c_cell = ws_rules.cell(row=3, column=col_i, value=h_t)
+        c_cell.font = Font(name="Arial", size=10, bold=True, color="FFFFFF")
+        c_cell.fill = PatternFill(
+            start_color="1F497D", end_color="1F497D", fill_type="solid"
+        )
+        c_cell.alignment = Alignment(horizontal="center", vertical="center")
+
+    rules
