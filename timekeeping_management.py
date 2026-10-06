@@ -7,9 +7,14 @@ from openpyxl.utils import get_column_letter
 from openpyxl.worksheet.datavalidation import DataValidation
 import pandas as pd
 import streamlit as st
-from supabase import create_client
 
-# Map chuẩn hóa ký hiệu chấm công (kể cả chữ thường và ký tự viết tắt)
+# Bọc an toàn import Supabase tránh lỗi crash ImportError khi thiếu thư viện
+try:
+    from supabase import create_client
+except ImportError:
+    create_client = None
+
+# Map chuẩn hóa ký hiệu chấm công (kể cả chữ thường và viết tắt)
 VALID_CODES_MAP = {
     "X": "X",
     "1": "X",
@@ -44,10 +49,12 @@ VALID_OPTIONS = ["", "X", "P", "ÔM", "CO", "CT", "T", "TS", "KL", "R", "H", "F"
 
 
 # ---------------------------------------------------------
-# 1. KẾT NỐI SUPABASE
+# 1. KẾT NỐI SUPABASE AN TOÀN
 # ---------------------------------------------------------
 @st.cache_resource
 def init_supabase():
+    if create_client is None:
+        return None
     try:
         url = st.secrets.get("SUPABASE_URL", "").strip()
         key = (
@@ -64,7 +71,7 @@ def init_supabase():
 
 
 # ---------------------------------------------------------
-# 2. KIỂM TRA NGÀY LỄ VIỆT NAM & CHUẨN HÓA CHUỖI
+# 2. KIỂM TRA NGÀY LỄ VIỆT NAM & CHUẨN HÓA
 # ---------------------------------------------------------
 def is_vietnam_holiday(day, month, year=2026):
     fixed_holidays = [(1, 1), (30, 4), (1, 5), (1, 9), (2, 9)]
@@ -297,7 +304,7 @@ def get_employees_by_unit(unit_name, all_units):
 
 
 # ---------------------------------------------------------
-# 5. TÍNH TOÁN BÁO CÁO CỘT TỔNG HỢP CHO DỮ LIỆU
+# 5. TÍNH TOÁN CỘT TỔNG HỢP DỮ LIỆU
 # ---------------------------------------------------------
 def calculate_summary_columns(df, date_cols):
     def calc_row(row):
@@ -331,18 +338,15 @@ def calculate_summary_columns(df, date_cols):
 
 
 # ---------------------------------------------------------
-# 6. TẠO FILE EXCEL 2 SHEET TÍCH HỢP DATA VALIDATION LIÊN KẾT
+# 6. EXPORT FILE EXCEL (CÓ SHEET QUY ƯỚC & DROPDOWN VALIDATION)
 # ---------------------------------------------------------
 def generate_timekeeping_excel(unit_name, month, year, df_employees):
     wb = openpyxl.Workbook()
 
-    # ---------------------------------------------------------
-    # SHEET 1: BẢNG CHẤM CÔNG HÀNG THÁNG
-    # ---------------------------------------------------------
+    # SHEET 1: BẢNG CHẤM CÔNG
     ws = wb.active
     ws.title = f"ChamCong_T{month}_{year}"
 
-    # Tiêu đề
     ws.merge_cells("A1:D1")
     ws["A1"] = "BỆNH VIỆN BƯU ĐIỆN"
     ws["A1"].font = Font(name="Arial", size=10, bold=True, color="002060")
@@ -374,7 +378,6 @@ def generate_timekeeping_excel(unit_name, month, year, df_employees):
 
     all_headers = headers + date_cols + summary_headers
 
-    # Định dạng Dòng 5: Tiêu đề cột
     for col_idx, h_text in enumerate(all_headers, start=1):
         cell = ws.cell(row=5, column=col_idx, value=h_text)
         cell.font = Font(name="Arial", size=9, bold=True, color="FFFFFF")
@@ -382,19 +385,19 @@ def generate_timekeeping_excel(unit_name, month, year, df_employees):
             horizontal="center", vertical="center", wrap_text=True
         )
 
-        fill_color = "1F497D"  # Xanh navy
+        fill_color = "1F497D"
         if 5 <= col_idx <= 4 + days_in_month:
             d = col_idx - 4
             if is_vietnam_holiday(d, month, year):
-                fill_color = "C00000"  # Đỏ Lễ
+                fill_color = "C00000"
             else:
                 dt = datetime(year, month, d)
                 if dt.weekday() == 6:
-                    fill_color = "4F81BD"  # Xanh Dương Chủ Nhật
+                    fill_color = "4F81BD"
                 elif dt.weekday() == 5:
-                    fill_color = "ED7D31"  # Cam Thứ 7
+                    fill_color = "ED7D31"
         elif col_idx > 4 + days_in_month:
-            fill_color = "274E13"  # Xanh Lá Đậm cho Cột Tổng Hợp Báo Cáo
+            fill_color = "274E13"
 
         cell.fill = PatternFill(
             start_color=fill_color, end_color=fill_color, fill_type="solid"
@@ -428,7 +431,6 @@ def generate_timekeeping_excel(unit_name, month, year, df_employees):
         ws.cell(row=r, column=3).alignment = Alignment(horizontal="left")
         ws.cell(row=r, column=4).alignment = Alignment(horizontal="left")
 
-        # CÔNG THỨC EXCEL TỰ ĐỘNG
         c_base = 5 + days_in_month
         ws.cell(
             row=r,
@@ -521,9 +523,7 @@ def generate_timekeeping_excel(unit_name, month, year, df_employees):
     for c in range(5 + days_in_month, last_col_idx + 1):
         ws.column_dimensions[get_column_letter(c)].width = 13
 
-    # ---------------------------------------------------------
-    # SHEET 2: QUY ƯỚC CÁC KÝ HIỆU CHẤM CÔNG (TẠO TRƯỚC ĐỂ THAM CHIẾU)
-    # ---------------------------------------------------------
+    # SHEET 2: QUY ƯỚC KÝ HIỆU
     rules_sheet_name = "Quy ước ký hiệu"
     ws_rules = wb.create_sheet(title=rules_sheet_name)
 
@@ -541,4 +541,95 @@ def generate_timekeeping_excel(unit_name, month, year, df_employees):
         )
         c_cell.alignment = Alignment(horizontal="center", vertical="center")
 
-    rules
+    rules_data = [
+        ("X", "Làm việc cả ngày (Tính 1 công)"),
+        ("P", "Nghỉ phép năm có hưởng lương"),
+        ("ÔM", "Nghỉ ốm đau có xác nhận của cơ sở y tế"),
+        ("CO", "Nghỉ con ốm có xác nhận y tế"),
+        ("CT", "Đi công tác / Học tập ngoài đơn vị"),
+        ("T", "Trực / Ca trực theo phân công"),
+        ("TS", "Nghỉ thai sản theo quy định"),
+        ("KL", "Nghỉ không hưởng lương"),
+        ("R", "Nghỉ việc riêng (được duyệt)"),
+        ("H", "Học tập / Bồi dưỡng chuyên môn"),
+        ("F", "Nghỉ Lễ / Tết hưởng nguyên lương"),
+    ]
+
+    for idx, (code, desc) in enumerate(rules_data, start=1):
+        r_idx = 3 + idx
+        ws_rules.cell(row=r_idx, column=1, value=idx).alignment = Alignment(
+            horizontal="center"
+        )
+        c2 = ws_rules.cell(row=r_idx, column=2, value=code)
+        c2.alignment = Alignment(horizontal="center")
+        c2.font = Font(name="Arial", size=10, bold=True, color="002060")
+        ws_rules.cell(row=r_idx, column=3, value=desc).alignment = Alignment(
+            horizontal="left"
+        )
+        for c_i in range(1, 4):
+            ws_rules.cell(row=r_idx, column=c_i).border = thin_border
+
+    ws_rules.column_dimensions["A"].width = 8
+    ws_rules.column_dimensions["B"].width = 15
+    ws_rules.column_dimensions["C"].width = 45
+
+    # DATA VALIDATION THAM CHIẾU SHEET 2
+    rules_range_ref = f"='{rules_sheet_name}'!$B$4:$B$14"
+    dv = DataValidation(type="list", formula1=rules_range_ref, allow_blank=True)
+    dv.errorTitle = "Lỗi nhập ký hiệu chấm công"
+    dv.error = "Ký hiệu không hợp lệ! Vui lòng chọn từ menu thả xuống."
+    ws.add_data_validation(dv)
+    dv.add(f"{first_d_letter}6:{last_d_letter}{max_row}")
+
+    out = io.BytesIO()
+    wb.save(out)
+    out.seek(0)
+    return out
+
+
+# ---------------------------------------------------------
+# 7. GIAO DIỆN CHẤM CÔNG HÀNG THÁNG
+# ---------------------------------------------------------
+def render_timekeeping_management():
+    st.markdown(
+        "<h3 style='color: #003366;'>📅 Chấm công - Ca trực - Phân lịch</h3>",
+        unsafe_allow_html=True,
+    )
+
+    supabase = init_supabase()
+    all_units = load_system_units(supabase)
+
+    col_f1, col_f2, col_f3 = st.columns([2, 2, 4])
+    with col_f1:
+        selected_month = st.selectbox(
+            "Chọn Tháng:", list(range(1, 13)), index=8
+        )
+    with col_f2:
+        selected_year = st.selectbox("Chọn Năm:", [2025, 2026, 2027], index=1)
+    with col_f3:
+        selected_unit = st.selectbox("Chọn Đơn vị / Khoa / Phòng:", all_units)
+
+    df_unit_emp = get_employees_by_unit(selected_unit, all_units)
+
+    st.markdown("---")
+    col_act1, col_act2 = st.columns([3, 4])
+
+    with col_act1:
+        excel_data = generate_timekeeping_excel(
+            selected_unit, selected_month, selected_year, df_unit_emp
+        )
+        file_name_clean = selected_unit.replace(" ", "_")
+        st.download_button(
+            label=f"📥 Tải File Excel Mẫu Chấm Công ({len(df_unit_emp)} Cán bộ)",
+            data=excel_data,
+            file_name=(
+                f"Mau_Cham_Cong_{file_name_clean}_T{selected_month}_{selected_year}.xlsx"
+            ),
+            mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+            type="primary",
+        )
+
+    with col_act2:
+        uploaded_file = st.file_uploader(
+            "📤 Upload Tệp Bảng Chấm Công (.xlsx)",
+            type=["xlsx", "xls"],
