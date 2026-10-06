@@ -3,10 +3,38 @@ import pandas as pd
 import streamlit as st
 from supabase import create_client
 
+# 1. DANH SÁCH THỨ TỰ CỘT CHUẨN THEO MẪU SƠ YẾU LÝ LỊCH BỘ NỘI VỤ / EXCEL UPLOAD
+STANDARD_COLUMN_ORDER = [
+    "Mã NV",
+    "Mã VNPT",
+    "Họ và tên",
+    "Ngày sinh",
+    "Giới tính",
+    "Quê quán",
+    "Dân tộc",
+    "Tôn giáo",
+    "Mã ngạch",
+    "Tên ngạch",
+    "Bậc lương",
+    "Hệ số lương",
+    "Đơn vị",
+    "Chức vụ",
+    "Chức danh",
+    "Trạng thái",
+    "Ngoại ngữ",
+    "Tin học",
+    "Số CCCD / CMND",
+    "Số CCHN Y tế",
+    "Tôn giáo khác",
+    "Ngày vào Đảng",
+    "Ngày chính thức",
+    "Nơi ở hiện tại",
+    "Hợp đồng",
+    "Điện thoại",
+    "Email",
+]
 
-# ---------------------------------------------------------
-# 1. KẾT NỐI CSDL SUPABASE
-# ---------------------------------------------------------
+
 @st.cache_resource
 def init_supabase():
     try:
@@ -24,59 +52,63 @@ def init_supabase():
         return None
 
 
+def reorder_columns(df, custom_order=None):
+    """Sắp xếp lại các cột theo đúng thứ tự ưu tiên của tệp Excel upload hoặc mẫu chuẩn"""
+    if df.empty:
+        return df
+
+    # Lấy thứ tự cột lưu từ file upload trong session_state (nếu có), hoặc dùng STANDARD_COLUMN_ORDER
+    order = custom_order or st.session_state.get(
+        "employee_columns_order", STANDARD_COLUMN_ORDER
+    )
+
+    existing_cols = df.columns.tolist()
+
+    # Giữ đúng thứ tự các cột có trong danh sách order
+    ordered_cols = [c for c in order if c in existing_cols]
+
+    # Giữ các cột phát sinh thêm (nếu có) vào cuối bảng
+    extra_cols = [c for c in existing_cols if c not in ordered_cols]
+
+    return df[ordered_cols + extra_cols]
+
+
 def load_employees_data(supabase_client):
-    """Tải danh sách cán bộ thực tế từ Session State hoặc Supabase CSDL"""
+    """Tải danh sách cán bộ thực tế và chuẩn hóa sắp xếp các cột"""
+    df = pd.DataFrame()
+
     if "employees_profile" in st.session_state:
         df_ses = st.session_state["employees_profile"]
         if isinstance(df_ses, pd.DataFrame) and not df_ses.empty:
-            return df_ses
+            df = df_ses.copy()
 
-    default_cols = [
-        "Mã NV",
-        "Họ và tên",
-        "Ngày sinh",
-        "Giới tính",
-        "Quê quán",
-        "Đơn vị",
-        "Chức vụ",
-        "Hợp đồng",
-        "Trạng thái",
-        "Điện thoại",
-    ]
+    if df.empty and supabase_client:
+        try:
+            res = (
+                supabase_client.table("categories")
+                .select("content")
+                .eq("cat_key", "employees_profile")
+                .execute()
+            )
+            if res.data and res.data[0].get("content"):
+                df = pd.DataFrame(res.data[0]["content"])
+        except Exception:
+            pass
 
-    if not supabase_client:
-        return pd.DataFrame(columns=default_cols)
+    if df.empty:
+        df = pd.DataFrame(columns=STANDARD_COLUMN_ORDER)
 
-    try:
-        res = (
-            supabase_client.table("categories")
-            .select("content")
-            .eq("cat_key", "employees_profile")
-            .execute()
-        )
-        if res.data and res.data[0].get("content"):
-            df = pd.DataFrame(res.data[0]["content"])
-            # Chuẩn hóa tên cột
-            if "Mã CB" in df.columns and "Mã NV" not in df.columns:
-                df.rename(columns={"Mã CB": "Mã NV"}, inplace=True)
-            if "Khoa / Phòng" in df.columns and "Đơn vị" not in df.columns:
-                df.rename(columns={"Khoa / Phòng": "Đơn vị"}, inplace=True)
-            if (
-                "Chức vụ / Chức danh" in df.columns
-                and "Chức vụ" not in df.columns
-            ):
-                df.rename(
-                    columns={"Chức vụ / Chức danh": "Chức vụ"}, inplace=True
-                )
-            return df
-        return pd.DataFrame(columns=default_cols)
-    except Exception:
-        return pd.DataFrame(columns=default_cols)
+    # Đồng bộ chuẩn hóa tên cột
+    if "Mã CB" in df.columns and "Mã NV" not in df.columns:
+        df.rename(columns={"Mã CB": "Mã NV"}, inplace=True)
+    if "Khoa / Phòng" in df.columns and "Đơn vị" not in df.columns:
+        df.rename(columns={"Khoa / Phòng": "Đơn vị"}, inplace=True)
+    if "Chức vụ / Chức danh" in df.columns and "Chức vụ" not in df.columns:
+        df.rename(columns={"Chức vụ / Chức danh": "Chức vụ"}, inplace=True)
+
+    return reorder_columns(df)
 
 
-# ---------------------------------------------------------
-# 2. GIAO DIỆN QUẢN LÝ HỒ SƠ CÁN BỘ (DUY NHẤT 1 BẢNG)
-# ---------------------------------------------------------
 def render_employee_management():
     st.markdown(
         "<h3 style='color: #003366;'>👤 Quản lý Hồ sơ Cán bộ (Mẫu Sơ yếu lý"
@@ -87,27 +119,13 @@ def render_employee_management():
     supabase = init_supabase()
     df_emp_current = load_employees_data(supabase)
 
-    # Khung công cụ thao tác
     col_btn1, col_btn2 = st.columns([2, 3])
 
     with col_btn1:
-        # Tạo tệp Excel mẫu
+        # Tạo file Excel mẫu theo đúng thứ tự cột chuẩn
         output_template = io.BytesIO()
         with pd.ExcelWriter(output_template, engine="openpyxl") as writer:
-            sample_df = pd.DataFrame(
-                columns=[
-                    "Mã NV",
-                    "Họ và tên",
-                    "Ngày sinh",
-                    "Giới tính",
-                    "Quê quán",
-                    "Đơn vị",
-                    "Chức vụ",
-                    "Hợp đồng",
-                    "Trạng thái",
-                    "Điện thoại",
-                ]
-            )
+            sample_df = pd.DataFrame(columns=STANDARD_COLUMN_ORDER)
             sample_df.to_excel(writer, index=False, sheet_name="HoSoCanBo")
         output_template.seek(0)
 
@@ -129,25 +147,10 @@ def render_employee_management():
     if uploaded_emp_file:
         try:
             df_uploaded = pd.read_excel(uploaded_emp_file).fillna("")
-            if (
-                "Mã CB" in df_uploaded.columns
-                and "Mã NV" not in df_uploaded.columns
-            ):
-                df_uploaded.rename(columns={"Mã CB": "Mã NV"}, inplace=True)
-            if (
-                "Khoa / Phòng" in df_uploaded.columns
-                and "Đơn vị" not in df_uploaded.columns
-            ):
-                df_uploaded.rename(
-                    columns={"Khoa / Phòng": "Đơn vị"}, inplace=True
-                )
-            if (
-                "Chức vụ / Chức danh" in df_uploaded.columns
-                and "Chức vụ" not in df_uploaded.columns
-            ):
-                df_uploaded.rename(
-                    columns={"Chức vụ / Chức danh": "Chức vụ"}, inplace=True
-                )
+
+            # Ghi nhớ lại nguyên bản thứ tự các cột từ file Excel upload
+            uploaded_cols = df_uploaded.columns.tolist()
+            st.session_state["employee_columns_order"] = uploaded_cols
 
             st.session_state["employees_profile"] = df_uploaded
 
@@ -159,7 +162,8 @@ def render_employee_management():
                 }).execute()
 
             st.success(
-                f"✅ Đã tải lên thành công {len(df_uploaded)} hồ sơ cán bộ!"
+                f"✅ Đã tải lên và sắp xếp chuẩn {len(df_uploaded)} hồ sơ theo"
+                " đúng thứ tự cột trong file Excel mẫu!"
             )
             st.rerun()
         except Exception as e:
@@ -167,13 +171,15 @@ def render_employee_management():
 
     st.markdown("---")
     st.write(
-        "📋 **Danh sách Hồ sơ Cán bộ hiện tại (Cho phép Thêm / Sửa / Xóa dòng"
-        " trực tiếp):**"
+        "📋 **Danh sách Hồ sơ Cán bộ hiện tại (Đã hiển thị đúng theo thứ tự"
+        " cột tệp Excel):**"
     )
 
-    # Lưới chỉnh sửa duy nhất
+    # Đảm bảo thứ tự cột trước khi đẩy vào bảng Data Editor
+    df_display = reorder_columns(df_emp_current)
+
     edited_employees = st.data_editor(
-        df_emp_current,
+        df_display,
         use_container_width=True,
         num_rows="dynamic",
         key="editor_single_employee_table",
@@ -189,13 +195,11 @@ def render_employee_management():
                     "content": edited_employees.to_dict(orient="records"),
                 }).execute()
                 st.success(
-                    "✅ Đã lưu thành công dữ liệu hồ sơ cán bộ vào cơ sở dữ"
-                    " liệu vĩnh viễn!"
+                    "✅ Đã lưu vĩnh viễn danh sách hồ sơ cán bộ vào CSDL theo"
+                    " đúng cấu trúc cột!"
                 )
                 st.rerun()
             except Exception as e:
                 st.error(f"Lỗi khi lưu CSDL: {e}")
         else:
-            st.success(
-                "✅ Đã lưu dữ liệu tạm thời vào hệ thống phiên làm việc!"
-            )
+            st.success("✅ Đã cập nhật dữ liệu vào phiên làm việc thành công!")
