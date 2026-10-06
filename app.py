@@ -233,6 +233,8 @@ elif "2. Danh mục Hệ thống" in menu_selection:
 
 # --- PHÂN HỆ 4: QUẢN LÝ HỒ SƠ CÁN BỘ ---
 elif "4. Quản lý Hồ sơ Cán bộ" in menu_selection:
+    from employee_management import render_employee_management
+    render_employee_management()
     st.markdown("### 👤 Quản lý Hồ sơ Cán bộ (Mẫu Sơ yếu lý lịch chuẩn Bộ Nội vụ)")
     df_emp_all = load_employees_data()
 
