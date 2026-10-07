@@ -20,18 +20,69 @@ st.set_page_config(
 # 2. HÀM HIỂN THỊ DASHBOARD TỔNG QUAN
 # ---------------------------------------------------------
 def render_dashboard():
-    # Đọc tổng số nhân sự thực tế từ tệp đã tải lên (nếu có)
-    total_emp = 1250
+    # Đọc dữ liệu hồ sơ nhân sự thực tế từ session_state
+    df_emp = pd.DataFrame()
     if "employees_profile" in st.session_state:
         df_ses = st.session_state["employees_profile"]
         if isinstance(df_ses, pd.DataFrame) and not df_ses.empty:
-            total_emp = len(df_ses)
+            df_emp = df_ses.copy()
+
+    total_emp = len(df_emp) if not df_emp.empty else 1250
+
+    # --- PHÂN TÍCH THỰC TẾ DỰA TRÊN FILE UPLOAD ---
+    if not df_emp.empty:
+        pos_col = None
+        for col in df_emp.columns:
+            if any(
+                k in str(col).lower()
+                for k in ["chức vụ", "chức danh", "vị trí"]
+            ):
+                pos_col = col
+                break
+
+        if pos_col:
+            counts = df_emp[pos_col].astype(str).str.strip().value_counts()
+            df_chuc_danh = pd.DataFrame({
+                "Chức danh công tác": counts.index,
+                "Số lượng": counts.values,
+            })
+            df_chuc_danh["Tỷ lệ (%)"] = (
+                df_chuc_danh["Số lượng"] / total_emp
+            ) * 100
+        else:
+            # Fallback nếu không tìm thấy cột chức vụ rõ ràng
+            ratios = [0.388, 0.414, 0.127, 0.034, 0.037]
+            quantities = [round(total_emp * r) for r in ratios]
+            df_chuc_danh = pd.DataFrame({
+                "Chức danh công tác": [
+                    "Bác sĩ",
+                    "Điều dưỡng",
+                    "Kỹ thuật viên",
+                    "Dược sĩ",
+                    "Hành chính / Khác",
+                ],
+                "Số lượng": quantities,
+                "Tỷ lệ (%)": [r * 100 for r in ratios],
+            })
+    else:
+        ratios = [0.388, 0.414, 0.127, 0.034, 0.037]
+        quantities = [round(total_emp * r) for r in ratios]
+        df_chuc_danh = pd.DataFrame({
+            "Chức danh công tác": [
+                "Bác sĩ",
+                "Điều dưỡng",
+                "Kỹ thuật viên",
+                "Dược sĩ",
+                "Hành chính / Khác",
+            ],
+            "Số lượng": quantities,
+            "Tỷ lệ (%)": [r * 100 for r in ratios],
+        })
 
     # --- LOGO VÀ TIÊU ĐỀ BỆNH VIỆN BƯU ĐIỆN ---
     col_logo, col_header = st.columns([2, 5])
     with col_logo:
         try:
-            # Tải file logo.png trong thư mục dự án GitHub
             st.image("logo.png", width=300)
         except Exception:
             st.markdown("🏥")
@@ -47,30 +98,15 @@ def render_dashboard():
             unsafe_allow_html=True,
         )
     st.markdown("---")
-    
+
     # --- 1. THỐNG KÊ CƠ CẤU LAO ĐỘNG THEO CHỨC DANH ---
     st.subheader(
         "📊 THỐNG KÊ CƠ CẤU LAO ĐỘNG THEO CHỨC DANH TOÀN BỆNH VIỆN"
     )
-    
-    ratios = [0.388, 0.414, 0.127, 0.034, 0.037]
-    quantities = [round(total_emp * r) for r in ratios]
-    
-    df_chuc_danh = pd.DataFrame({
-        "Chức danh công tác": [
-            "Bác sĩ",
-            "Điều dưỡng",
-            "Kỹ thuật viên",
-            "Dược sĩ",
-            "Hành chính / Khác",
-        ],
-        "Số lượng": quantities,
-        "Tỷ lệ (%)": [r * 100 for r in ratios],
-    })
-    
+
     col_chart, col_table = st.columns([3, 2])
     with col_chart:
-        # Biểu đồ cột đứng (Vertical Bar Chart)[cite: 2]
+        # Biểu đồ cột trực quan phong cách hiện đại (Hiệu ứng nổi bật)
         fig_bar = px.bar(
             df_chuc_danh,
             x="Chức danh công tác",
@@ -86,6 +122,7 @@ def render_dashboard():
             textposition="outside",
             texttemplate="%{text} người",
             cliponaxis=False,
+            marker=dict(line=dict(width=1.5, color="DarkSlateGray")),
         )
         fig_bar.update_layout(
             title="<b>Tỷ lệ phân bổ Nhân sự theo Chức danh</b>",
@@ -96,28 +133,30 @@ def render_dashboard():
             margin=dict(l=20, r=20, t=40, b=20),
         )
         st.plotly_chart(fig_bar, use_container_width=True)
-        
+
     with col_table:
-        st.markdown("##### 📋 Số liệu chi tiết")
+        st.markdown("##### 📋 Phân tích Số liệu chi tiết")
         st.dataframe(
             df_chuc_danh,
             use_container_width=True,
             hide_index=True,
             column_config={
-                "Chức danh công tác": st.column_config.Column(width="medium"),
+                "Chức danh công tác": st.column_config.Column(
+                    "Chức danh", width="medium"
+                ),
                 "Số lượng": st.column_config.NumberColumn(
                     "Số lượng (Người)", format="%d"
                 ),
                 "Tỷ lệ (%)": st.column_config.NumberColumn(
-                    "Tỷ lệ (%)", format="%.1f%%"
+                    "Tỷ lệ", format="%.1f%%"
                 ),
             },
         )
         st.write("")
         st.metric("Tổng số Cán bộ - Nhân viên", f"{total_emp:,} người")
-        
+
     st.markdown("---")
-    
+
     # --- 2. THỐNG KÊ CẢNH BÁO THỜI HẠN NHÂN SỰ ---
     st.subheader("⚠️ THỐNG KÊ CẢNH BÁO THỜI HẠN NHÂN SỰ")
     c1, c2, c3, c4, c5 = st.columns(5)
