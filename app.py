@@ -1,4 +1,5 @@
 from datetime import datetime
+import numpy as np
 import pandas as pd
 import plotly.express as px
 import streamlit as st
@@ -90,7 +91,6 @@ def is_management_position(pos_str):
 # 3. HÀM HIỂN THỊ DASHBOARD
 # ---------------------------------------------------------
 def render_dashboard():
-    # Kiểm tra và lấy dữ liệu hồ sơ từ session_state, nếu chưa có tạo bộ dữ liệu 842 lao động mẫu để test
     df_emp = pd.DataFrame()
     if "employees_profile" in st.session_state:
         df_ses = st.session_state["employees_profile"]
@@ -98,9 +98,6 @@ def render_dashboard():
             df_emp = df_ses.copy()
 
     if df_emp.empty:
-        # Tạo dữ liệu giả lập chuẩn 842 lao động với ngày sinh thực tế để hệ thống hoạt động ngay lập tức
-        import numpy as np
-
         np.random.seed(42)
         sample_names = [
             "Nguyễn Văn An",
@@ -115,10 +112,10 @@ def render_dashboard():
 
         df_emp = pd.DataFrame({
             "Mã NV": [f"BV{i:04d}" for i in range(1, 843)],
-            "Họ và tên": np.choice(sample_names, 842),
-            "Ngày sinh": np.choice(sample_dob, 842),
-            "Chức vụ": np.choice(sample_pos, 842),
-            "Đơn vị công tác": np.choice(sample_units, 842),
+            "Họ và tên": np.random.choice(sample_names, 842),
+            "Ngày sinh": np.random.choice(sample_dob, 842),
+            "Chức vụ": np.random.choice(sample_pos, 842),
+            "Đơn vị công tác": np.random.choice(sample_units, 842),
         })
         st.session_state["employees_profile"] = df_emp
 
@@ -149,7 +146,7 @@ def render_dashboard():
 
     st.markdown("---")
 
-    # --- 1. 5 THẺ CHỈ SỐ TỔNG QUAN (METRICS CARDS) ---
+    # --- 1. 5 THẺ CHỈ SỐ TỔNG QUAN ---
     m1, m2, m3, m4, m5 = st.columns(5)
 
     with m1:
@@ -220,7 +217,7 @@ def render_dashboard():
     st.write("")
 
     # =========================================================
-    # 2. THÔNG BÁO & DANH SÁCH SINH NHẬT NHÂN SỰ THEO THÁNG
+    # 2. THỐNG KÊ & DANH SÁCH SINH NHẬT NHÂN SỰ THEO THÁNG
     # =========================================================
     st.markdown("---")
     st.markdown(
