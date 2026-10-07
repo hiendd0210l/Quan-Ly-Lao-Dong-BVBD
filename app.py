@@ -31,28 +31,58 @@ st.markdown(
 
 
 # ---------------------------------------------------------
-# 2. HÀM HỖ TRỢ XỬ LÝ SINH NHẬT VÀ QUẢN LÝ
+# 2. HÀM XỬ LÝ NGÀY SINH VÀ QUẢN LÝ THÔNG MINH
 # ---------------------------------------------------------
-def parse_birth_month(val):
-    if pd.isna(val) or not val:
+def extract_month_from_value(val):
+    if pd.isna(val) or val is None:
         return None
+    
+    # Trường hợp nếu là kiểu datetime hoặc Timestamp của pandas
+    if isinstance(val, (pd.Timestamp, datetime)):
+        return val.month
+        
     s = str(val).strip()
-    # Thử quét định dạng ngày tháng phổ biến (DD/MM/YYYY hoặc YYYY-MM-DD)
-    try:
-        if "/" in s:
-            parts = s.split("/")
-            if len(parts) >= 2:
-                return int(parts[1])
-        elif "-" in s:
-            parts = s.split("-")
+    if not s or s.lower() in ["nan", "nat", "none", ""]:
+        return None
+        
+    # Xử lý dạng số ngày tháng Excel (ví dụ: 25489)
+    if s.replace(".", "", 1).isdigit():
+        try:
+            num = float(s)
+            if num > 59:  # Trừ lùi lỗi ngày 1900 của Excel
+                dt = pd.to_datetime("1899-12-30") + pd.Timedelta(days=num)
+                return dt.month
+        except Exception:
+            pass
+
+    # Xử lý chuỗi chứa định dạng ngày tháng (DD/MM/YYYY hoặc YYYY-MM-DD hoặc DD-MM-YYYY)
+    for sep in ["/", "-", "."]:
+        if sep in s:
+            parts = s.split(sep)
             if len(parts) >= 3:
-                return int(parts[1])
-        # Nếu chuỗi chứa ngày tháng dạng datetime
-        dt = pd.to_datetime(val, errors="coerce")
+                # Kiểm tra xem phần nào là tháng (thường ở giữa hoặc ở đầu)
+                for p in parts:
+                    if p.isdigit():
+                        val_int = int(p)
+                        if 1 <= val_int <= 12 and len(p) <= 2:
+                            # Nếu phần trước hoặc sau có năm 4 chữ số thì phần 1-12 chính là tháng
+                            return val_int
+            elif len(parts) == 2:
+                # Trường hợp chỉ có tháng và năm (MM/YYYY)
+                for p in parts:
+                    if p.isdigit():
+                        val_int = int(p)
+                        if 1 <= val_int <= 12 and len(p) <= 2:
+                            return val_int
+
+    # Thử parse trực tiếp bằng pandas to_datetime
+    try:
+        dt = pd.to_datetime(val, errors="coerce", dayfirst=True)
         if not pd.isna(dt):
             return dt.month
     except Exception:
         pass
+
     return None
 
 
@@ -198,23 +228,45 @@ def render_dashboard():
             key="sb_birth_month",
         )
 
-    # Xử lý lọc danh sách sinh nhật theo tháng
     birthday_count = 0
     df_birthday_filtered = pd.DataFrame()
 
     if not df_emp.empty:
-        # Tìm cột ngày sinh
+        # Tự động quét thông minh tìm cột Ngày sinh
         dob_col = None
         for col in df_emp.columns:
+            c_low = str(col).lower()
             if any(
-                k in str(col).lower()
-                for k in ["ngày sinh", "năm sinh", "dob", "ngay_sinh"]
+                k in c_low
+                for k in [
+                    "ngày sinh",
+                    "năm sinh",
+                    "dob",
+                    "ngay_sinh",
+                    "birthday",
+                    "ns",
+                ]
             ):
                 dob_col = col
                 break
 
+        # Nếu không tìm thấy qua tên cột, quét tự động các cột chứa giá trị ngày tháng
+        if not dob_col:
+            for col in df_emp.columns:
+                sample_series = df_emp[col].dropna().head(5)
+                matched_cnt = sum(
+                    1
+                    for v in sample_series
+                    if extract_month_from_value(v) is not None
+                )
+                if matched_cnt >= 2:
+                    dob_col = col
+                    break
+
         if dob_col:
-            df_emp["_thang_sinh"] = df_emp[dob_col].apply(parse_birth_month)
+            df_emp["_thang_sinh"] = df_emp[dob_col].apply(
+                extract_month_from_value
+            )
             df_birthday_filtered = df_emp[
                 df_emp["_thang_sinh"] == selected_birth_month
             ].copy()
@@ -229,14 +281,13 @@ def render_dashboard():
     with col_s3:
         st.write("")
         show_birthday_list = st.checkbox(
-            f"📋 Xem danh sách chi tiết cán bộ sinh nhật tháng {selected_birth_month}"
+            f"📋 Xem danh sách chi tiết cán bộ sinh nhật tháng"
+            f" {selected_birth_month}"
         )
 
     if show_birthday_list:
         if birthday_count > 0:
-            # Nhận diện các cột tương ứng
-            id_col, name_col, pos_col, title_col, unit_col, dob_col_real = (
-                None,
+            id_col, name_col, pos_col, title_col, unit_col = (
                 None,
                 None,
                 None,
@@ -266,10 +317,6 @@ def render_dashboard():
                     for k in ["đơn vị", "khoa", "phòng", "bộ phận", "don_vi"]
                 ):
                     unit_col = col
-                elif not dob_col_real and any(
-                    k in c_low for k in ["ngày sinh", "dob", "ngay_sinh"]
-                ):
-                    dob_col_real = col
 
             list_data = []
             for _, r in df_birthday_filtered.iterrows():
@@ -288,14 +335,13 @@ def render_dashboard():
                     "Đơn vị công tác": str(r.get(unit_col) or "").strip()
                     if unit_col
                     else "",
-                    "Ngày sinh": str(r.get(dob_col_real) or "").strip()
-                    if dob_col_real
+                    "Ngày sinh": str(r.get(dob_col) or "").strip()
+                    if dob_col
                     else "",
                     "_is_quan_ly": is_management_position(cv),
                 })
 
             df_out = pd.DataFrame(list_data)
-            # Sắp xếp: Quản lý lên trên (_is_quan_ly = True xếp trước)
             df_out = df_out.sort_values(
                 by="_is_quan_ly", ascending=False
             ).reset_index(drop=True)
