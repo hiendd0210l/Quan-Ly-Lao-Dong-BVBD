@@ -44,13 +44,10 @@ def extract_month_from_value(val):
     if not s or s.lower() in ["nan", "nat", "none", "", "không"]:
         return None
 
-    # Hỗ trợ phân tách các định dạng chuẩn ngày/tháng/năm (ví dụ: 12/12/1985 hoặc 1985-12-12)
     for sep in ["/", "-", "."]:
         if sep in s:
             parts = s.split(sep)
             if len(parts) >= 3:
-                # Nếu định dạng DD/MM/YYYY -> phần tử thứ 2 là tháng
-                # Nếu định dạng YYYY/MM/DD -> phần tử thứ 2 cũng là tháng
                 for idx, p in enumerate(parts):
                     if idx in [1, 2] and p.isdigit():
                         val_int = int(p)
@@ -225,21 +222,23 @@ def render_dashboard():
         )
 
     all_columns = list(df_emp.columns)
-    with col_s2:
-        default_idx = 0
-        for idx, c in enumerate(all_columns):
-            c_low = str(c).lower()
-            if any(
-                k in c_low
-                for k in ["ngày sinh", "năm sinh", "dob", "ngay_sinh", "ns"]
-            ):
-                default_idx = idx
-                break
 
+    # Tự động tìm vị trí mặc định cho Cột Ngày sinh
+    default_dob_idx = 0
+    for idx, c in enumerate(all_columns):
+        c_low = str(c).lower()
+        if any(
+            k in c_low
+            for k in ["ngày sinh", "năm sinh", "dob", "ngay_sinh", "ns"]
+        ):
+            default_dob_idx = idx
+            break
+
+    with col_s2:
         dob_col = st.selectbox(
             "Chọn cột Ngày sinh:",
             all_columns,
-            index=default_idx,
+            index=default_dob_idx,
             key="select_dob_column_dashboard",
         )
 
@@ -267,39 +266,74 @@ def render_dashboard():
             f" {selected_birth_month}"
         )
 
+    # --- BỔ SUNG Ô CHỌN CỘT THỦ CÔNG CHO CHỨC VỤ & CHỨC DANH ---
     if show_birthday_list:
-        if birthday_count > 0:
-            id_col, name_col, pos_col, title_col, unit_col = (
-                None,
-                None,
-                None,
-                None,
-                None,
-            )
-            for col in df_birthday_filtered.columns:
-                c_low = str(col).lower()
-                if not id_col and any(
-                    k in c_low for k in ["mã nv", "mã cb", "ma_nv", "id"]
-                ):
-                    id_col = col
-                elif not name_col and any(
-                    k in c_low for k in ["họ và tên", "họ tên", "tên", "name"]
-                ):
-                    name_col = col
-                elif not pos_col and any(
-                    k in c_low for k in ["chức vụ", "chuc_vu"]
-                ):
-                    pos_col = col
-                elif not title_col and any(
-                    k in c_low for k in ["chức danh", "chuc_danh", "vị trí"]
-                ):
-                    title_col = col
-                elif not unit_col and any(
-                    k in c_low
-                    for k in ["đơn vị", "khoa", "phòng", "bộ phận", "don_vi"]
-                ):
-                    unit_col = col
+        st.markdown(
+            "<div style='background-color: #f1f5f9; padding: 10px; border-radius:"
+            " 6px; margin-bottom: 10px; font-size: 13px; color: #334155;'>"
+            "⚙️ <b>Tùy chỉnh cột hiển thị:</b> Chọn đúng tên cột trong file Excel"
+            " của bạn để thông tin Chức vụ và Chức danh chính xác tuyệt"
+            " đối.</div>",
+            unsafe_allow_html=True,
+        )
+        c_map1, c_map2, c_map3, c_map4, c_map5 = st.columns(5)
 
+        # Tìm index mặc định cho Mã NV, Họ tên, Chức vụ, Chức danh, Đơn vị
+        def get_default_index(keywords):
+            for idx, c in enumerate(all_columns):
+                c_low = str(c).lower()
+                if any(k in c_low for k in keywords):
+                    return idx
+            return 0
+
+        with c_map1:
+            id_col = st.selectbox(
+                "Cột Mã NV:",
+                all_columns,
+                index=get_default_index(["mã nv", "mã cb", "ma_nv", "id"]),
+            )
+        with c_map2:
+            name_col = st.selectbox(
+                "Cột Họ và tên:",
+                all_columns,
+                index=get_default_index([
+                    "họ và tên",
+                    "họ tên",
+                    "tên",
+                    "name",
+                ]),
+            )
+        with c_map3:
+            pos_col = st.selectbox(
+                "Cột Chức vụ:",
+                all_columns,
+                index=get_default_index(["chức vụ", "chuc_vu"]),
+            )
+        with c_map4:
+            title_col = st.selectbox(
+                "Cột Chức danh:",
+                all_columns,
+                index=get_default_index([
+                    "chức danh",
+                    "chuc_danh",
+                    "vị trí",
+                    "chuyên môn",
+                ]),
+            )
+        with c_map5:
+            unit_col = st.selectbox(
+                "Cột Đơn vị / Khoa:",
+                all_columns,
+                index=get_default_index([
+                    "đơn vị",
+                    "khoa",
+                    "phòng",
+                    "bộ phận",
+                    "don_vi",
+                ]),
+            )
+
+        if birthday_count > 0:
             list_data = []
             for _, r in df_birthday_filtered.iterrows():
                 cv = str(r.get(pos_col) or "").strip() if pos_col else ""
