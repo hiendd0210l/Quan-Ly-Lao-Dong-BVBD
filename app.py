@@ -1,11 +1,11 @@
 import pandas as pd
 import plotly.express as px
 import streamlit as st
+
 from category_management import render_category_management
 from employee_management import render_employee_management
 from organization_management import render_organization_management
 from timekeeping_management import render_timekeeping_management
-
 # ---------------------------------------------------------
 # 1. CẤU HÌNH TRANG STREAMLIT
 # ---------------------------------------------------------
@@ -17,58 +17,18 @@ st.set_page_config(
 
 
 # ---------------------------------------------------------
-# 2. HÀM XỬ LÝ VÀ GOM NHÓM TRÌNH ĐỘ CHUYÊN MÔN THÔNG MINH
-# ---------------------------------------------------------
-def extract_education_level(val):
-    s = str(val).lower()
-    if any(
-        k in s
-        for k in [
-            "tiến sĩ",
-            "ts",
-            "ck2",
-            "chuyên khoa ii",
-            "chuyên khoa 2",
-            "phó giáo sư",
-            "gs",
-        ]
-    ):
-        return "Tiến sĩ / CKII / PGS"
-    elif any(
-        k in s for k in ["thạc sĩ", "thS", "cki", "chuyên khoa i", "chuyên khoa 1"]
-    ):
-        return "Thạc sĩ / CKI"
-    elif any(
-        k in s for k in ["đại học", "bsi", "bác sĩ", "cử nhân", "đh"]
-    ):  # Nếu có chứa Đại học hoặc Bác sĩ (trừ thạc sĩ/tiến sĩ ở trên)
-        return "Đại học / Bác sĩ"
-    elif any(k in s for k in ["cao đẳng", "cđ"]):
-        return "Cao đẳng"
-    elif any(k in s for k in ["trung cấp", "tc", "sơ cấp"]):
-        return "Trung cấp / Sơ cấp"
-    else:
-        return "Khác / Chưa xác định"
-
-
-# ---------------------------------------------------------
-# 3. HÀM HIỂN THỊ DASHBOARD TỔNG QUAN
+# 2. HÀM HIỂN THỊ DASHBOARD TỔNG QUAN
 # ---------------------------------------------------------
 def render_dashboard():
-    df_emp = pd.DataFrame()
-    if "employees_profile" in st.session_state:
-        df_ses = st.session_state["employees_profile"]
-        if isinstance(df_ses, pd.DataFrame) and not df_ses.empty:
-            df_emp = df_ses.copy()
-
-    total_emp = len(df_emp) if not df_emp.empty else 0
-
     # --- LOGO VÀ TIÊU ĐỀ BỆNH VIỆN BƯU ĐIỆN ---
     col_logo, col_header = st.columns([2, 5])
     with col_logo:
         try:
+            # Tải file logo.png trong thư mục dự án GitHub
             st.image("logo.png", width=300)
         except Exception:
             st.markdown("🏥")
+
     with col_header:
         st.markdown(
             "<h1 style='margin-bottom: 0px; color: #0056b3; font-size:"
@@ -80,168 +40,144 @@ def render_dashboard():
             " THỐNG QUẢN TRỊ NHÂN SỰ & CÁN BỘ</h3>",
             unsafe_allow_html=True,
         )
+
     st.markdown("---")
 
-    if df_emp.empty:
-        st.warning(
-            "⚠️ Chưa có dữ liệu hồ sơ cán bộ. Vui lòng tải tệp Excel lên tại"
-            " mục **'4. Quản lý Hồ sơ Cán bộ'** để hệ thống tổng hợp báo cáo"
-            " chính xác."
-        )
-        return
+    # --- 1. THỐNG KÊ CƠ CẤU LAO ĐỘNG THEO CHỨC DANH ---
+    st.subheader(
+        "📊 THỐNG KÊ CƠ CẤU LAO ĐỘNG THEO CHỨC DANH TOÀN BỆNH VIỆN"
+    )
 
-    # --- TỰ ĐỘNG TÌM CỘT CHỨA THÔNG TIN TRÌNH ĐỘ / CHỨC DANH ĐỂ BÓC TÁCH ---
-    target_col = None
-    for col in df_emp.columns:
-        col_lower = str(col).lower()
-        if any(
-            k in col_lower
-            for k in [
-                "chức danh",
-                "trình độ",
-                "chuyên môn",
-                "bằng cấp",
-                "vị trí",
-                "chức vụ",
-            ]
-        ):
-            target_col = col
-            break
-
-    if not target_col and len(df_emp.columns) > 2:
-        target_col = df_emp.columns[2]  # Lấy cột mặc định nếu không tìm thấy
-
-    if target_col:
-        # Áp dụng hàm bóc tách và gom nhóm thông minh theo Trình độ chuyên môn
-        edu_series = df_emp[target_col].apply(extract_education_level)
-        counts = edu_series.value_counts()
-
-        # Sắp xếp thứ tự ưu tiên học hàm/học vị từ cao xuống thấp
-        order_priority = [
-            "Tiến sĩ / CKII / PGS",
-            "Thạc sĩ / CKI",
-            "Đại học / Bác sĩ",
-            "Cao đẳng",
-            "Trung cấp / Sơ cấp",
-            "Khác / Chưa xác định",
-        ]
-        counts = counts.reindex(
-            [o for o in order_priority if o in counts.index]
-        )
-
-        df_trinh_do = pd.DataFrame({
-            "Trình độ chuyên môn": counts.index,
-            "Số lượng": counts.values,
-        })
-        df_trinh_do["Tỷ lệ (%)"] = (
-            df_trinh_do["Số lượng"] / total_emp
-        ) * 100
-    else:
-        df_trinh_do = pd.DataFrame({
-            "Trình độ chuyên môn": ["Chưa xác định"],
-            "Số lượng": [total_emp],
-            "Tỷ lệ (%)": [100.0],
-        })
-
-    # =========================================================
-    # HIỂN THỊ BIỂU ĐỒ VÀ BẢNG THỐNG KÊ THEO TRÌNH ĐỘ CHUYÊN MÔN
-    # =========================================================
-    st.subheader("🎓 THỐNG KÊ CƠ CẤU NHÂN SỰ THEO TRÌNH ĐỘ CHUYÊN MÔN")
+    df_chuc_danh = pd.DataFrame({
+        "Chức danh công tác": [
+            "Bác sĩ",
+            "Điều dưỡng",
+            "Kỹ thuật viên",
+            "Dược sĩ",
+            "Hành chính / Khác",
+        ],
+        "Số lượng": [485, 518, 158, 43, 46],
+        "Tỷ lệ (%)": [38.8, 41.4, 12.7, 3.4, 3.7],
+    })
 
     col_chart, col_table = st.columns([3, 2])
+
     with col_chart:
+        # Biểu đồ cột đứng (Vertical Bar Chart)
         fig_bar = px.bar(
-            df_trinh_do,
-            x="Trình độ chuyên môn",
+            df_chuc_danh,
+            x="Chức danh công tác",
             y="Số lượng",
             text="Số lượng",
-            color="Trình độ chuyên môn",
+            color="Chức danh công tác",
             labels={
                 "Số lượng": "Số lượng (người)",
-                "Trình độ chuyên môn": "Trình độ chuyên môn",
+                "Chức danh công tác": "Chức danh công tác",
             },
         )
+
         fig_bar.update_traces(
-            textposition="outside",
-            texttemplate="%{text} người",
-            cliponaxis=False,
-            marker=dict(line=dict(width=2, color="rgba(0,0,0,0.3)")),
+            textposition="outside", texttemplate="%{text} người", cliponaxis=False
         )
+
         fig_bar.update_layout(
-            title="<b>Phân bố Nhân sự theo Trình độ Chuyên môn (Góc nhìn 3D)</b>",
-            xaxis_title="Trình độ chuyên môn",
+            title="<b>Tỷ lệ phân bổ Nhân sự theo Chức danh</b>",
+            xaxis_title="Chức danh công tác",
             yaxis_title="Số lượng (Người)",
             showlegend=False,
             height=380,
-            scene_camera=dict(eye=dict(x=1.5, y=1.5, z=1.2)),
             margin=dict(l=20, r=20, t=40, b=20),
         )
+
         st.plotly_chart(fig_bar, use_container_width=True)
 
     with col_table:
-        st.markdown("##### 📋 Phân tích Chi tiết Theo Trình độ")
+        st.markdown("##### 📋 Số liệu chi tiết")
         st.dataframe(
-            df_trinh_do,
+            df_chuc_danh,
             use_container_width=True,
             hide_index=True,
             column_config={
-                "Trình độ chuyên môn": st.column_config.Column(
-                    "Trình độ", width="medium"
-                ),
+                "Chức danh công tác": st.column_config.Column(width="medium"),
                 "Số lượng": st.column_config.NumberColumn(
                     "Số lượng (Người)", format="%d"
                 ),
                 "Tỷ lệ (%)": st.column_config.NumberColumn(
-                    "Tỷ lệ", format="%.2f%%"
+                    "Tỷ lệ (%)", format="%.1f%%"
                 ),
             },
         )
         st.write("")
-        st.metric(
-            "Tổng số Cán bộ - Nhân viên thực tế", f"{total_emp:,} người"
-        )
+        st.metric("Tổng số Cán bộ - Nhân viên", "1,250 người")
 
     st.markdown("---")
 
-    # --- THỐNG KÊ TỔNG QUAN HỆ THỐNG ---
-    st.subheader("⚠️ THỐNG KÊ HỆ THỐNG QUẢN TRỊ NHÂN SỰ")
+    # --- 2. THỐNG KÊ CẢNH BÁO THỜI HẠN NHÂN SỰ ---
+    st.subheader("⚠️ THỐNG KÊ CẢNH BÁO THỜI HẠN NHÂN SỰ")
 
     c1, c2, c3, c4, c5 = st.columns(5)
     with c1:
-        st.metric(
-            "Tổng số hồ sơ quản lý",
-            f"{total_emp} cán bộ",
-            "Dữ liệu thật từ file",
-        )
+        st.metric("Đến hạn nâng lương", "18 cán bộ", "In 30 ngày")
     with c2:
-        unit_count = (
-            df_emp.iloc[:, 3].nunique() if len(df_emp.columns) > 3 else "Nhiều"
-        )
-        st.metric("Cơ cấu Khoa/Phòng", f"{unit_count} đơn vị", "Hoạt động")
+        st.metric("Hết hạn hợp đồng", "12 người", "In 30 ngày")
     with c3:
-        st.metric("Định biên nhân sự", "Chuẩn", "Đang theo dõi")
+        st.metric("Nâng thâm niên nghề", "05 người", "In 30 ngày")
     with c4:
-        st.metric("Trạng thái dữ liệu", "Hợp lệ", "Đã đồng bộ")
+        st.metric("Gia hạn CCHN / Bổ sung", "08 bác sĩ", "Chưa cập nhật")
     with c5:
-        st.metric("Hệ thống trực tuyến", "Hoạt động", "Ổn định")
+        st.metric("Đến tuổi nghỉ hưu", "03 cán bộ", "In 6 tháng")
 
     st.write("")
-    st.markdown(
-        "##### 🔔 Danh sách Hồ sơ Cán bộ thực tế trong hệ thống (Trích xuất từ"
-        " tệp upload)"
-    )
+    st.markdown("##### 🔔 Danh sách Cán bộ đến hạn cần xử lý")
 
-    display_cols = [c for c in df_emp.columns[:8]]
-    st.dataframe(
-        df_emp[display_cols], use_container_width=True, hide_index=True
-    )
+    df_canh_bao = pd.DataFrame({
+        "Mã CB": ["CB0012", "CB0145", "CB0233", "CB0089", "CB0512"],
+        "Họ và Tên": [
+            "Nguyễn Văn An",
+            "Trần Thị Bích",
+            "Lê Hoàng Cường",
+            "Phạm Minh Đức",
+            "Vũ Thị Dung",
+        ],
+        "Khoa / Phòng": [
+            "Khoa Khám bệnh",
+            "Khoa Cấp cứu",
+            "Khoa Ngoại tổng hợp",
+            "Khoa Dược",
+            "Phòng Tổ chức Cán bộ",
+        ],
+        "Loại cảnh báo": [
+            "Đến hạn nâng bậc lương",
+            "Hết hạn HĐLĐ 36 tháng",
+            "Đến hạn nâng thâm niên",
+            "Gia hạn CCHN Y tế",
+            "Thông báo chuẩn bị nghỉ hưu",
+        ],
+        "Thời hạn": [
+            "15/10/2026",
+            "20/10/2026",
+            "25/10/2026",
+            "05/11/2026",
+            "12/12/2026",
+        ],
+        "Trạng thái": [
+            "Chưa xử lý",
+            "Chưa xử lý",
+            "Đang duyệt",
+            "Chưa xử lý",
+            "Đã thông báo",
+        ],
+    })
+
+    st.dataframe(df_canh_bao, use_container_width=True, hide_index=True)
 
 
 # ---------------------------------------------------------
-# 4. THANH MENU BÊN TRÁI (SIDEBAR)
+# 3. THANH MENU BÊN TRÁI (SIDEBAR)
 # ---------------------------------------------------------
 st.sidebar.title("MENU QUẢN TRỊ CÁN BỘ")
 st.sidebar.markdown("---")
+
 menu_choice = st.sidebar.radio(
     "Chọn chức năng:",
     [
@@ -259,7 +195,7 @@ menu_choice = st.sidebar.radio(
         "12. 🎓 Quản lý Đào tạo & Bồi dưỡng CML",
         "13. 🏆 Đánh giá & Đánh giá An toàn Bệnh viện",
         "14. 🎖️ Thi đua - Khen thưởng & Kỷ luật",
-        "15. 🏥 Quản lý Sức khỏe & Bảo hiểm",
+        "15. 🏥 Quản lý Sức khỏe & Báo hiểm",
         "16. 📋 Quản lý Tài sản - Quy trình",
         "17. 📈 Báo cáo - Thống kê - CSDL Y tế",
         "18. ⚙️ Quản lý Hệ thống & Phân quyền",
@@ -267,7 +203,7 @@ menu_choice = st.sidebar.radio(
 )
 
 # ---------------------------------------------------------
-# 5. ĐIỀU HƯỚNG MÀN HÌNH THEO MENU AN TOÀN
+# 4. ĐIỀU HƯỚNG MÀN HÌNH THEO MENU AN TOÀN
 # ---------------------------------------------------------
 if "Dashboard Tổng quan" in menu_choice:
     render_dashboard()
@@ -277,7 +213,7 @@ elif "Quản lý Cơ cấu Tổ chức" in menu_choice:
     render_organization_management()
 elif "Quản lý Hồ sơ Cán bộ" in menu_choice:
     render_employee_management()
-elif "Chấm công" in menu_choice:
+elif "Chấm công" in menu_choice:  # Thêm điều kiện này cho Menu 8
     render_timekeeping_management()
 else:
     st.title(menu_choice)
