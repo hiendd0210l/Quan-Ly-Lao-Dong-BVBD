@@ -58,20 +58,45 @@ def render_dashboard():
         )
         return
 
-    # --- TỰ ĐỘNG NHẬN DIỆN CHÍNH XÁC CỘT CHỨC DANH / CHỨC VỤ ---
+    # --- TỰ ĐỘNG NHẬN DIỆN CHÍNH XÁC CỘT CHỨC DANH / CHỨC VỤ (LỌC BỎ CỘT SỐ) ---
     pos_col = None
     for col in df_emp.columns:
         col_lower = str(col).lower()
-        if (
-            "chức danh" in col_lower
-            or "chức vụ" in col_lower
-            or "vị trí" in col_lower
+        if any(
+            k in col_lower for k in ["chức danh", "chức vụ", "vị trí", "chd", "cv"]
         ):
-            pos_col = col
-            break
+            sample_val = (
+                str(df_emp[col].dropna().iloc[0])
+                if not df_emp[col].dropna().empty
+                else ""
+            )
+            # Đảm bảo không lấy nhầm cột số/thập phân
+            if not sample_val.replace(".", "", 1).isdigit():
+                pos_col = col
+                break
+
+    # Nếu không tìm thấy bằng từ khóa, quét tìm cột chữ (text) chứa từ khóa y tế
+    if not pos_col:
+        for col in df_emp.columns:
+            if df_emp[col].dtype == "object":
+                sample_str = str(df_emp[col].iloc[0]).lower()
+                if any(
+                    w in sample_str
+                    for w in [
+                        "bác sĩ",
+                        "điều dưỡng",
+                        "kỹ thuật",
+                        "dược",
+                        "trưởng",
+                        "phó",
+                        "nhân viên",
+                        "chuyên viên",
+                    ]
+                ):
+                    pos_col = col
+                    break
 
     if pos_col:
-        # Gom nhóm dữ liệu thật từ cột nhận diện được
         counts = df_emp[pos_col].astype(str).str.strip().value_counts()
         df_chuc_danh = pd.DataFrame({
             "Chức danh công tác": counts.index,
@@ -82,7 +107,7 @@ def render_dashboard():
         ) * 100
     else:
         df_chuc_danh = pd.DataFrame({
-            "Chức danh công tác": ["Chưa xác định"],
+            "Chức danh công tác": ["Chưa xác định cột Chức vụ"],
             "Số lượng": [total_emp],
             "Tỷ lệ (%)": [100.0],
         })
@@ -94,7 +119,7 @@ def render_dashboard():
 
     col_chart, col_table = st.columns([3, 2])
     with col_chart:
-        # Cấu hình biểu đồ dạng cột với hiệu ứng phối cảnh 3D hiện đại
+        # Cấu hình biểu đồ cột với hiệu ứng phối cảnh 3D hiện đại
         fig_bar = px.bar(
             df_chuc_danh,
             x="Chức danh công tác",
@@ -120,7 +145,7 @@ def render_dashboard():
             height=380,
             scene_camera=dict(
                 eye=dict(x=1.5, y=1.5, z=1.2)
-            ),  # Hiệu ứng phối cảnh chiều sâu
+            ),  # Hiệu ứng chiều sâu 3D
             margin=dict(l=20, r=20, t=40, b=20),
         )
         st.plotly_chart(fig_bar, use_container_width=True)
@@ -148,29 +173,21 @@ def render_dashboard():
 
     st.markdown("---")
 
-    # --- 2. THỐNG KÊ CẢNH BÁO TỪ DỮ LIỆU HỒ SƠ THẬT ---
-    st.subheader("⚠️ THỐNG KÊ CẢNH BÁO THỜI HẠN NHÂN SỰ")
+    # --- 2. THỐNG KÊ TỔNG QUAN HỒ SƠ THỰC TẾ ---
+    st.subheader("⚠️ THỐNG KÊ HỆ THỐNG QUẢN TRỊ NHÂN SỰ")
 
-    # Tìm kiếm các cột liên quan đến ngày tháng trong dữ liệu thật để lọc cảnh báo thông minh
-    date_cols = [
-        c
-        for c in df_emp.columns
-        if any(
-            k in str(c).lower()
-            for k in ["ngày", "hạn", "sinh", "hợp đồng", "lương"]
-        )
-    ]
-
-    # Hiển thị số liệu tổng quan dựa trên kích thước tập dữ liệu thực tế
     c1, c2, c3, c4, c5 = st.columns(5)
     with c1:
         st.metric(
             "Tổng số hồ sơ quản lý",
             f"{total_emp} cán bộ",
-            "Đã cập nhật CSDL",
+            "Dữ liệu thật từ file",
         )
     with c2:
-        st.metric("Cơ cấu khoa/phòng", f"{df_emp.iloc[:, 0].nunique()} đơn vị", "Hoạt động")
+        unit_count = (
+            df_emp.iloc[:, 3].nunique() if len(df_emp.columns) > 3 else "Nhiều"
+        )
+        st.metric("Cơ cấu Khoa/Phòng", f"{unit_count} đơn vị", "Hoạt động")
     with c3:
         st.metric("Định biên nhân sự", "Chuẩn", "Đang theo dõi")
     with c4:
@@ -184,11 +201,7 @@ def render_dashboard():
         " tệp upload)"
     )
 
-    # Hiển thị bảng danh sách hồ sơ thực tế thay vì bảng demo cứng nhắc
-    display_cols = [
-        c
-        for c in df_emp.columns[:8]
-    ]  # Lấy tối đa 8 cột đầu tiên của dữ liệu thật
+    display_cols = [c for c in df_emp.columns[:8]]
     st.dataframe(
         df_emp[display_cols], use_container_width=True, hide_index=True
     )
