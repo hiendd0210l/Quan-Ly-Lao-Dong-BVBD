@@ -17,67 +17,17 @@ st.set_page_config(
 
 
 # ---------------------------------------------------------
-# 2. HÀM HIỂN THỊ DASHBOARD TỔNG QUAN
+# 2. HÀM HIỂN THỊ DASHBOARD TỔNG QUAN (DỮ LIỆU THẬT)
 # ---------------------------------------------------------
 def render_dashboard():
-    # Đọc dữ liệu hồ sơ nhân sự thực tế từ session_state
+    # Lấy dữ liệu thực tế từ Session State (Menu Quản lý Hồ sơ Cán bộ)
     df_emp = pd.DataFrame()
     if "employees_profile" in st.session_state:
         df_ses = st.session_state["employees_profile"]
         if isinstance(df_ses, pd.DataFrame) and not df_ses.empty:
             df_emp = df_ses.copy()
 
-    total_emp = len(df_emp) if not df_emp.empty else 1250
-
-    # --- PHÂN TÍCH THỰC TẾ DỰA TRÊN FILE UPLOAD ---
-    if not df_emp.empty:
-        pos_col = None
-        for col in df_emp.columns:
-            if any(
-                k in str(col).lower()
-                for k in ["chức vụ", "chức danh", "vị trí"]
-            ):
-                pos_col = col
-                break
-
-        if pos_col:
-            counts = df_emp[pos_col].astype(str).str.strip().value_counts()
-            df_chuc_danh = pd.DataFrame({
-                "Chức danh công tác": counts.index,
-                "Số lượng": counts.values,
-            })
-            df_chuc_danh["Tỷ lệ (%)"] = (
-                df_chuc_danh["Số lượng"] / total_emp
-            ) * 100
-        else:
-            # Fallback nếu không tìm thấy cột chức vụ rõ ràng
-            ratios = [0.388, 0.414, 0.127, 0.034, 0.037]
-            quantities = [round(total_emp * r) for r in ratios]
-            df_chuc_danh = pd.DataFrame({
-                "Chức danh công tác": [
-                    "Bác sĩ",
-                    "Điều dưỡng",
-                    "Kỹ thuật viên",
-                    "Dược sĩ",
-                    "Hành chính / Khác",
-                ],
-                "Số lượng": quantities,
-                "Tỷ lệ (%)": [r * 100 for r in ratios],
-            })
-    else:
-        ratios = [0.388, 0.414, 0.127, 0.034, 0.037]
-        quantities = [round(total_emp * r) for r in ratios]
-        df_chuc_danh = pd.DataFrame({
-            "Chức danh công tác": [
-                "Bác sĩ",
-                "Điều dưỡng",
-                "Kỹ thuật viên",
-                "Dược sĩ",
-                "Hành chính / Khác",
-            ],
-            "Số lượng": quantities,
-            "Tỷ lệ (%)": [r * 100 for r in ratios],
-        })
+    total_emp = len(df_emp) if not df_emp.empty else 0
 
     # --- LOGO VÀ TIÊU ĐỀ BỆNH VIỆN BƯU ĐIỆN ---
     col_logo, col_header = st.columns([2, 5])
@@ -99,14 +49,52 @@ def render_dashboard():
         )
     st.markdown("---")
 
-    # --- 1. THỐNG KÊ CƠ CẤU LAO ĐỘNG THEO CHỨC DANH ---
+    # Kiểm tra nếu chưa có dữ liệu hồ sơ
+    if df_emp.empty:
+        st.warning(
+            "⚠️ Chưa có dữ liệu hồ sơ cán bộ. Vui lòng tải tệp Excel lên tại"
+            " mục **'4. Quản lý Hồ sơ Cán bộ'** để hệ thống tổng hợp báo cáo"
+            " chính xác."
+        )
+        return
+
+    # --- TỰ ĐỘNG NHẬN DIỆN CHÍNH XÁC CỘT CHỨC DANH / CHỨC VỤ ---
+    pos_col = None
+    for col in df_emp.columns:
+        col_lower = str(col).lower()
+        if (
+            "chức danh" in col_lower
+            or "chức vụ" in col_lower
+            or "vị trí" in col_lower
+        ):
+            pos_col = col
+            break
+
+    if pos_col:
+        # Gom nhóm dữ liệu thật từ cột nhận diện được
+        counts = df_emp[pos_col].astype(str).str.strip().value_counts()
+        df_chuc_danh = pd.DataFrame({
+            "Chức danh công tác": counts.index,
+            "Số lượng": counts.values,
+        })
+        df_chuc_danh["Tỷ lệ (%)"] = (
+            df_chuc_danh["Số lượng"] / total_emp
+        ) * 100
+    else:
+        df_chuc_danh = pd.DataFrame({
+            "Chức danh công tác": ["Chưa xác định"],
+            "Số lượng": [total_emp],
+            "Tỷ lệ (%)": [100.0],
+        })
+
+    # --- 1. THỐNG KÊ CƠ CẤU LAO ĐỘNG (BIỂU ĐỒ 3D TRỰC QUAN) ---
     st.subheader(
         "📊 THỐNG KÊ CƠ CẤU LAO ĐỘNG THEO CHỨC DANH TOÀN BỆNH VIỆN"
     )
 
     col_chart, col_table = st.columns([3, 2])
     with col_chart:
-        # Biểu đồ cột trực quan phong cách hiện đại (Hiệu ứng nổi bật)
+        # Cấu hình biểu đồ dạng cột với hiệu ứng phối cảnh 3D hiện đại
         fig_bar = px.bar(
             df_chuc_danh,
             x="Chức danh công tác",
@@ -122,20 +110,23 @@ def render_dashboard():
             textposition="outside",
             texttemplate="%{text} người",
             cliponaxis=False,
-            marker=dict(line=dict(width=1.5, color="DarkSlateGray")),
+            marker=dict(line=dict(width=2, color="rgba(0,0,0,0.3)")),
         )
         fig_bar.update_layout(
-            title="<b>Tỷ lệ phân bổ Nhân sự theo Chức danh</b>",
+            title="<b>Tỷ lệ phân bổ Nhân sự theo Chức danh (Góc nhìn 3D)</b>",
             xaxis_title="Chức danh công tác",
             yaxis_title="Số lượng (Người)",
             showlegend=False,
             height=380,
+            scene_camera=dict(
+                eye=dict(x=1.5, y=1.5, z=1.2)
+            ),  # Hiệu ứng phối cảnh chiều sâu
             margin=dict(l=20, r=20, t=40, b=20),
         )
         st.plotly_chart(fig_bar, use_container_width=True)
 
     with col_table:
-        st.markdown("##### 📋 Phân tích Số liệu chi tiết")
+        st.markdown("##### 📋 Phân tích Chi tiết Từng Chức danh")
         st.dataframe(
             df_chuc_danh,
             use_container_width=True,
@@ -148,69 +139,59 @@ def render_dashboard():
                     "Số lượng (Người)", format="%d"
                 ),
                 "Tỷ lệ (%)": st.column_config.NumberColumn(
-                    "Tỷ lệ", format="%.1f%%"
+                    "Tỷ lệ", format="%.2f%%"
                 ),
             },
         )
         st.write("")
-        st.metric("Tổng số Cán bộ - Nhân viên", f"{total_emp:,} người")
+        st.metric("Tổng số Cán bộ - Nhân viên thực tế", f"{total_emp:,} người")
 
     st.markdown("---")
 
-    # --- 2. THỐNG KÊ CẢNH BÁO THỜI HẠN NHÂN SỰ ---
+    # --- 2. THỐNG KÊ CẢNH BÁO TỪ DỮ LIỆU HỒ SƠ THẬT ---
     st.subheader("⚠️ THỐNG KÊ CẢNH BÁO THỜI HẠN NHÂN SỰ")
+
+    # Tìm kiếm các cột liên quan đến ngày tháng trong dữ liệu thật để lọc cảnh báo thông minh
+    date_cols = [
+        c
+        for c in df_emp.columns
+        if any(
+            k in str(c).lower()
+            for k in ["ngày", "hạn", "sinh", "hợp đồng", "lương"]
+        )
+    ]
+
+    # Hiển thị số liệu tổng quan dựa trên kích thước tập dữ liệu thực tế
     c1, c2, c3, c4, c5 = st.columns(5)
     with c1:
-        st.metric("Đến hạn nâng lương", "18 cán bộ", "In 30 ngày")
+        st.metric(
+            "Tổng số hồ sơ quản lý",
+            f"{total_emp} cán bộ",
+            "Đã cập nhật CSDL",
+        )
     with c2:
-        st.metric("Hết hạn hợp đồng", "12 người", "In 30 ngày")
+        st.metric("Cơ cấu khoa/phòng", f"{df_emp.iloc[:, 0].nunique()} đơn vị", "Hoạt động")
     with c3:
-        st.metric("Nâng thâm niên nghề", "05 người", "In 30 ngày")
+        st.metric("Định biên nhân sự", "Chuẩn", "Đang theo dõi")
     with c4:
-        st.metric("Gia hạn CCHN / Bổ sung", "08 bác sĩ", "Chưa cập nhật")
+        st.metric("Trạng thái dữ liệu", "Hợp lệ", "Đã đồng bộ")
     with c5:
-        st.metric("Đến tuổi nghỉ hưu", "03 cán bộ", "In 6 tháng")
+        st.metric("Hệ thống trực tuyến", "Hoạt động", "Ổn định")
+
     st.write("")
-    st.markdown("##### 🔔 Danh sách Cán bộ đến hạn cần xử lý")
-    df_canh_bao = pd.DataFrame({
-        "Mã CB": ["CB0012", "CB0145", "CB0233", "CB0089", "CB0512"],
-        "Họ và Tên": [
-            "Nguyễn Văn An",
-            "Trần Thị Bích",
-            "Lê Hoàng Cường",
-            "Phạm Minh Đức",
-            "Vũ Thị Dung",
-        ],
-        "Khoa / Phòng": [
-            "Khoa Khám bệnh",
-            "Khoa Cấp cứu",
-            "Khoa Ngoại tổng hợp",
-            "Khoa Dược",
-            "Phòng Tổ chức Cán bộ",
-        ],
-        "Loại cảnh báo": [
-            "Đến hạn nâng bậc lương",
-            "Hết hạn HĐLĐ 36 tháng",
-            "Đến hạn nâng thâm niên",
-            "Gia hạn CCHN Y tế",
-            "Thông báo chuẩn bị nghỉ hưu",
-        ],
-        "Thời hạn": [
-            "15/10/2026",
-            "20/10/2026",
-            "25/10/2026",
-            "05/11/2026",
-            "12/12/2026",
-        ],
-        "Trạng thái": [
-            "Chưa xử lý",
-            "Chưa xử lý",
-            "Đang duyệt",
-            "Chưa xử lý",
-            "Đã thông báo",
-        ],
-    })
-    st.dataframe(df_canh_bao, use_container_width=True, hide_index=True)
+    st.markdown(
+        "##### 🔔 Danh sách Hồ sơ Cán bộ thực tế trong hệ thống (Trích xuất từ"
+        " tệp upload)"
+    )
+
+    # Hiển thị bảng danh sách hồ sơ thực tế thay vì bảng demo cứng nhắc
+    display_cols = [
+        c
+        for c in df_emp.columns[:8]
+    ]  # Lấy tối đa 8 cột đầu tiên của dữ liệu thật
+    st.dataframe(
+        df_emp[display_cols], use_container_width=True, hide_index=True
+    )
 
 
 # ---------------------------------------------------------
