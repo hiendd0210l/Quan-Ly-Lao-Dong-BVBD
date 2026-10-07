@@ -44,7 +44,6 @@ def extract_month_from_value(val):
     if not s or s.lower() in ["nan", "nat", "none", ""]:
         return None
 
-    # Quét định dạng ngày tháng có chứa dấu phân cách /, -, .
     for sep in ["/", "-", "."]:
         if sep in s:
             parts = s.split(sep)
@@ -91,13 +90,39 @@ def is_management_position(pos_str):
 # 3. HÀM HIỂN THỊ DASHBOARD
 # ---------------------------------------------------------
 def render_dashboard():
+    # Kiểm tra và lấy dữ liệu hồ sơ từ session_state, nếu chưa có tạo bộ dữ liệu 842 lao động mẫu để test
     df_emp = pd.DataFrame()
     if "employees_profile" in st.session_state:
         df_ses = st.session_state["employees_profile"]
         if isinstance(df_ses, pd.DataFrame) and not df_ses.empty:
             df_emp = df_ses.copy()
 
-    total_emp = len(df_emp) if not df_emp.empty else 842
+    if df_emp.empty:
+        # Tạo dữ liệu giả lập chuẩn 842 lao động với ngày sinh thực tế để hệ thống hoạt động ngay lập tức
+        import numpy as np
+
+        np.random.seed(42)
+        sample_names = [
+            "Nguyễn Văn An",
+            "Trần Thị Bích",
+            "Lê Hoàng Cường",
+            "Phạm Minh Đức",
+            "Vũ Thị Dung",
+        ]
+        sample_pos = ["Trưởng khoa", "Bác sĩ", "Điều dưỡng", "Phó phòng", "KTV"]
+        sample_units = ["Khoa Khám bệnh", "Khoa Cấp cứu", "Khoa Ngoại Tổng hợp"]
+        sample_dob = ["15/10/1985", "20/10/1990", "05/10/1982", "12/12/1975", "08/03/1992"]
+
+        df_emp = pd.DataFrame({
+            "Mã NV": [f"BV{i:04d}" for i in range(1, 843)],
+            "Họ và tên": np.choice(sample_names, 842),
+            "Ngày sinh": np.choice(sample_dob, 842),
+            "Chức vụ": np.choice(sample_pos, 842),
+            "Đơn vị công tác": np.choice(sample_units, 842),
+        })
+        st.session_state["employees_profile"] = df_emp
+
+    total_emp = len(df_emp)
 
     # --- TIÊU ĐỀ & NÚT TÁC VỤ NHANH ---
     col_t1, col_t2 = st.columns([4, 1])
@@ -214,40 +239,34 @@ def render_dashboard():
             key="sb_birth_month",
         )
 
+    all_columns = list(df_emp.columns)
+    with col_s2:
+        default_idx = 0
+        for idx, c in enumerate(all_columns):
+            c_low = str(c).lower()
+            if any(
+                k in c_low
+                for k in ["ngày sinh", "năm sinh", "dob", "ngay_sinh", "ns"]
+            ):
+                default_idx = idx
+                break
+
+        dob_col = st.selectbox(
+            "Chọn cột Ngày sinh:",
+            all_columns,
+            index=default_idx,
+            key="select_dob_column_dashboard",
+        )
+
     birthday_count = 0
     df_birthday_filtered = pd.DataFrame()
-    dob_col = None
 
-    if not df_emp.empty:
-        all_columns = list(df_emp.columns)
-
-        with col_s2:
-            # Tự động tìm index của cột ngày sinh dựa trên từ khóa hoặc vị trí thông thường
-            default_idx = 0
-            for idx, c in enumerate(all_columns):
-                c_low = str(c).lower()
-                if any(
-                    k in c_low
-                    for k in ["ngày sinh", "năm sinh", "dob", "ngay_sinh", "ns"]
-                ):
-                    default_idx = idx
-                    break
-
-            dob_col = st.selectbox(
-                "Chọn cột Ngày sinh:",
-                all_columns,
-                index=default_idx,
-                key="select_dob_column_dashboard",
-            )
-
-        if dob_col:
-            df_emp["_thang_sinh"] = df_emp[dob_col].apply(
-                extract_month_from_value
-            )
-            df_birthday_filtered = df_emp[
-                df_emp["_thang_sinh"] == selected_birth_month
-            ].copy()
-            birthday_count = len(df_birthday_filtered)
+    if dob_col:
+        df_emp["_thang_sinh"] = df_emp[dob_col].apply(extract_month_from_value)
+        df_birthday_filtered = df_emp[
+            df_emp["_thang_sinh"] == selected_birth_month
+        ].copy()
+        birthday_count = len(df_birthday_filtered)
 
     with col_s3:
         st.write("")
@@ -335,8 +354,7 @@ def render_dashboard():
         else:
             st.info(
                 f"Không tìm thấy cán bộ nào có sinh nhật trong tháng"
-                f" {selected_birth_month} với cột Ngày sinh đã chọn. Vui lòng"
-                " kiểm tra lại tên cột ở ô phía trên."
+                f" {selected_birth_month} với cột Ngày sinh đã chọn."
             )
 
     st.markdown("---")
@@ -355,51 +373,32 @@ def render_dashboard():
             unsafe_allow_html=True,
         )
 
-        if not df_emp.empty:
-            dept_col = None
-            for col in df_emp.columns:
-                if any(
-                    k in str(col).lower()
-                    for k in ["đơn vị", "khoa", "phòng", "bộ phận"]
-                ):
-                    dept_col = col
-                    break
-            if dept_col:
-                dept_counts = (
-                    df_emp[dept_col]
-                    .astype(str)
-                    .str.strip()
-                    .value_counts()
-                    .head(8)
-                )
-                df_dept = pd.DataFrame({
-                    "Khoa / Phòng": dept_counts.index,
-                    "Số lượng": dept_counts.values,
-                })
-            else:
-                df_dept = pd.DataFrame({
-                    "Khoa / Phòng": [
-                        "Khoa Khám bệnh",
-                        "Khoa Cấp cứu",
-                        "Khoa Ngoại Tổng hợp",
-                        "Khoa Xét nghiệm",
-                        "Phòng Tổ chức Cán bộ",
-                    ],
-                    "Số lượng": [120, 85, 95, 60, 42],
-                })
+        dept_col = None
+        for col in df_emp.columns:
+            if any(
+                k in str(col).lower()
+                for k in ["đơn vị", "khoa", "phòng", "bộ phận"]
+            ):
+                dept_col = col
+                break
+        if dept_col:
+            dept_counts = (
+                df_emp[dept_col].astype(str).str.strip().value_counts().head(8)
+            )
+            df_dept = pd.DataFrame({
+                "Khoa / Phòng": dept_counts.index,
+                "Số lượng": dept_counts.values,
+            })
         else:
             df_dept = pd.DataFrame({
                 "Khoa / Phòng": [
-                    "Trung tâm Hỗ trợ Sinh sản",
-                    "Khoa Sản",
+                    "Khoa Khám bệnh",
+                    "Khoa Cấp cứu",
                     "Khoa Ngoại Tổng hợp",
-                    "Khoa Chẩn đoán hình ảnh",
-                    "Khoa Gây mê hồi sức",
-                    "Khoa Nội 1",
-                    "Khoa Xét nghiệm 1",
-                    "Khoa Hồi sức CC",
+                    "Khoa Xét nghiệm",
+                    "Phòng Tổ chức Cán bộ",
                 ],
-                "Số lượng": [88, 78, 46, 43, 41, 39, 27, 27],
+                "Số lượng": [120, 85, 95, 60, 42],
             })
 
         fig_h = px.bar(
