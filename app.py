@@ -1,11 +1,11 @@
 import pandas as pd
 import plotly.express as px
 import streamlit as st
-
 from category_management import render_category_management
 from employee_management import render_employee_management
 from organization_management import render_organization_management
 from timekeeping_management import render_timekeeping_management
+
 # ---------------------------------------------------------
 # 1. CẤU HÌNH TRANG STREAMLIT
 # ---------------------------------------------------------
@@ -17,159 +17,288 @@ st.set_page_config(
 
 
 # ---------------------------------------------------------
-# 2. HÀM HIỂN THỊ DASHBOARD TỔNG QUAN
+# 2. HÀM HIỂN THỊ DASHBOARD THEO MẪU CHUẨN
 # ---------------------------------------------------------
 def render_dashboard():
-    # --- LOGO VÀ TIÊU ĐỀ BỆNH VIỆN BƯU ĐIỆN ---
-    col_logo, col_header = st.columns([2, 5])
-    with col_logo:
-        try:
-            # Tải file logo.png trong thư mục dự án GitHub
-            st.image("logo.png", width=300)
-        except Exception:
-            st.markdown("🏥")
+    # Lấy dữ liệu thực tế từ Session State (Menu Quản lý Hồ sơ Cán bộ)
+    df_emp = pd.DataFrame()
+    if "employees_profile" in st.session_state:
+        df_ses = st.session_state["employees_profile"]
+        if isinstance(df_ses, pd.DataFrame) and not df_ses.empty:
+            df_emp = df_ses.copy()
 
-    with col_header:
+    total_emp = len(df_emp) if not df_emp.empty else 842  # Lấy 842 làm mặc định hoặc số thực tế
+
+    # --- TIÊU ĐỀ VÀ NÚT TÁC VỤ NHANH ---
+    col_t1, col_t2 = st.columns([4, 1])
+    with col_t1:
         st.markdown(
-            "<h1 style='margin-bottom: 0px; color: #0056b3; font-size:"
-            " 36px;'>BỆNH VIỆN BƯU ĐIỆN</h1>",
+            "<h2 style='color: #002060; margin-bottom: 0px;'>Tổng quan hệ"
+            " thống nhân sự</h2>",
             unsafe_allow_html=True,
         )
         st.markdown(
-            "<h3 style='color: #555; margin-top: 5px; font-size: 22px;'>HỆ"
-            " THỐNG QUẢN TRỊ NHÂN SỰ & CÁN BỘ</h3>",
+            "<p style='color: #555; font-size: 14px;'>Một nhịp nhìn rõ ràng"
+            " cho những việc cần xử lý đúng hạn[cite: 11].</p>",
+            unsafe_allow_html=True,
+        )
+    with col_t2:
+        if st.button("Mở danh sách hồ sơ ➔", type="primary"):
+            st.rerun()
+
+    st.markdown("---")
+
+    # --- 1. 5 THẺ CHỈ SỐ TỔNG QUAN (METRICS CARDS MẪU) ---
+    m1, m2, m3, m4, m5 = st.columns(5)
+    
+    with m1:
+        st.markdown(
+            """
+            <div style="background-color: white; padding: 15px; border-radius: 8px; border-left: 4px solid #1F497D; box-shadow: 0 1px 3px rgba(0,0,0,0.1);">
+                <span style="font-size: 12px; color: gray;">01-01</span>
+                <h2 style="margin: 5px 0; color: #1F497D;">{}</h2>
+                <p style="margin: 0; font-size: 13px; font-weight: bold;">Tổng số nhân sự</p>
+                <p style="margin: 0; font-size: 11px; color: gray;">trong biên chế & hợp đồng[cite: 11]</p>
+            </div>
+            """.format(total_emp),
             unsafe_allow_html=True,
         )
 
-    st.markdown("---")
-
-    # --- 1. THỐNG KÊ CƠ CẤU LAO ĐỘNG THEO CHỨC DANH ---
-    st.subheader(
-        "📊 THỐNG KÊ CƠ CẤU LAO ĐỘNG THEO CHỨC DANH TOÀN BỆNH VIỆN"
-    )
-
-    df_chuc_danh = pd.DataFrame({
-        "Chức danh công tác": [
-            "Bác sĩ",
-            "Điều dưỡng",
-            "Kỹ thuật viên",
-            "Dược sĩ",
-            "Hành chính / Khác",
-        ],
-        "Số lượng": [485, 518, 158, 43, 46],
-        "Tỷ lệ (%)": [38.8, 41.4, 12.7, 3.4, 3.7],
-    })
-
-    col_chart, col_table = st.columns([3, 2])
-
-    with col_chart:
-        # Biểu đồ cột đứng (Vertical Bar Chart)
-        fig_bar = px.bar(
-            df_chuc_danh,
-            x="Chức danh công tác",
-            y="Số lượng",
-            text="Số lượng",
-            color="Chức danh công tác",
-            labels={
-                "Số lượng": "Số lượng (người)",
-                "Chức danh công tác": "Chức danh công tác",
-            },
+    with m2:
+        st.markdown(
+            """
+            <div style="background-color: white; padding: 15px; border-radius: 8px; border-left: 4px solid #274E13; box-shadow: 0 1px 3px rgba(0,0,0,0.1);">
+                <span style="font-size: 12px; color: gray;">01-02</span>
+                <h2 style="margin: 5px 0; color: #274E13;">{}</h2>
+                <p style="margin: 0; font-size: 13px; font-weight: bold;">Đang làm việc</p>
+                <p style="margin: 0; font-size: 11px; color: gray;">100% tổng hồ sơ[cite: 11]</p>
+            </div>
+            """.format(total_emp),
+            unsafe_allow_html=True,
         )
 
-        fig_bar.update_traces(
-            textposition="outside", texttemplate="%{text} người", cliponaxis=False
+    with m3:
+        st.markdown(
+            """
+            <div style="background-color: white; padding: 15px; border-radius: 8px; border-left: 4px solid #E37D00; box-shadow: 0 1px 3px rgba(0,0,0,0.1);">
+                <span style="font-size: 12px; color: gray;">01-03</span>
+                <h2 style="margin: 5px 0; color: #E37D00;">0</h2>
+                <p style="margin: 0; font-size: 13px; font-weight: bold;">Gia nhập tháng này</p>
+                <p style="margin: 0; font-size: 11px; color: gray;">hồ sơ mới cập nhật[cite: 11]</p>
+            </div>
+            """,
+            unsafe_allow_html=True,
         )
 
-        fig_bar.update_layout(
-            title="<b>Tỷ lệ phân bổ Nhân sự theo Chức danh</b>",
-            xaxis_title="Chức danh công tác",
-            yaxis_title="Số lượng (Người)",
-            showlegend=False,
-            height=380,
-            margin=dict(l=20, r=20, t=40, b=20),
+    with m4:
+        st.markdown(
+            """
+            <div style="background-color: white; padding: 15px; border-radius: 8px; border-left: 4px solid #C00000; box-shadow: 0 1px 3px rgba(0,0,0,0.1);">
+                <span style="font-size: 12px; color: gray;">01-04</span>
+                <h2 style="margin: 5px 0; color: #C00000;">4</h2>
+                <p style="margin: 0; font-size: 13px; font-weight: bold;">Hồ sơ sắp hết hạn</p>
+                <p style="margin: 0; font-size: 11px; color: gray;">cần rà soát sớm[cite: 11]</p>
+            </div>
+            """,
+            unsafe_allow_html=True,
         )
 
-        st.plotly_chart(fig_bar, use_container_width=True)
-
-    with col_table:
-        st.markdown("##### 📋 Số liệu chi tiết")
-        st.dataframe(
-            df_chuc_danh,
-            use_container_width=True,
-            hide_index=True,
-            column_config={
-                "Chức danh công tác": st.column_config.Column(width="medium"),
-                "Số lượng": st.column_config.NumberColumn(
-                    "Số lượng (Người)", format="%d"
-                ),
-                "Tỷ lệ (%)": st.column_config.NumberColumn(
-                    "Tỷ lệ (%)", format="%.1f%%"
-                ),
-            },
+    with m5:
+        st.markdown(
+            """
+            <div style="background-color: white; padding: 15px; border-radius: 8px; border-left: 4px solid #7030A0; box-shadow: 0 1px 3px rgba(0,0,0,0.1);">
+                <span style="font-size: 12px; color: gray;">01-05</span>
+                <h2 style="margin: 5px 0; color: #7030A0;">3</h2>
+                <p style="margin: 0; font-size: 13px; font-weight: bold;">Cảnh báo chưa đọc</p>
+                <p style="margin: 0; font-size: 11px; color: gray;">đang chờ xử lý[cite: 11]</p>
+            </div>
+            """,
+            unsafe_allow_html=True,
         )
-        st.write("")
-        st.metric("Tổng số Cán bộ - Nhân viên", "1,250 người")
-
-    st.markdown("---")
-
-    # --- 2. THỐNG KÊ CẢNH BÁO THỜI HẠN NHÂN SỰ ---
-    st.subheader("⚠️ THỐNG KÊ CẢNH BÁO THỜI HẠN NHÂN SỰ")
-
-    c1, c2, c3, c4, c5 = st.columns(5)
-    with c1:
-        st.metric("Đến hạn nâng lương", "18 cán bộ", "In 30 ngày")
-    with c2:
-        st.metric("Hết hạn hợp đồng", "12 người", "In 30 ngày")
-    with c3:
-        st.metric("Nâng thâm niên nghề", "05 người", "In 30 ngày")
-    with c4:
-        st.metric("Gia hạn CCHN / Bổ sung", "08 bác sĩ", "Chưa cập nhật")
-    with c5:
-        st.metric("Đến tuổi nghỉ hưu", "03 cán bộ", "In 6 tháng")
 
     st.write("")
-    st.markdown("##### 🔔 Danh sách Cán bộ đến hạn cần xử lý")
+    st.write("")
 
-    df_canh_bao = pd.DataFrame({
-        "Mã CB": ["CB0012", "CB0145", "CB0233", "CB0089", "CB0512"],
-        "Họ và Tên": [
-            "Nguyễn Văn An",
-            "Trần Thị Bích",
-            "Lê Hoàng Cường",
-            "Phạm Minh Đức",
-            "Vũ Thị Dung",
-        ],
-        "Khoa / Phòng": [
-            "Khoa Khám bệnh",
-            "Khoa Cấp cứu",
-            "Khoa Ngoại tổng hợp",
-            "Khoa Dược",
-            "Phòng Tổ chức Cán bộ",
-        ],
-        "Loại cảnh báo": [
-            "Đến hạn nâng bậc lương",
-            "Hết hạn HĐLĐ 36 tháng",
-            "Đến hạn nâng thâm niên",
-            "Gia hạn CCHN Y tế",
-            "Thông báo chuẩn bị nghỉ hưu",
-        ],
-        "Thời hạn": [
-            "15/10/2026",
-            "20/10/2026",
-            "25/10/2026",
-            "05/11/2026",
-            "12/12/2026",
-        ],
-        "Trạng thái": [
-            "Chưa xử lý",
-            "Chưa xử lý",
-            "Đang duyệt",
-            "Chưa xử lý",
-            "Đã thông báo",
-        ],
-    })
+    # --- 2. KHU VỰC BIỂU ĐỒ KHOA/PHÒNG & CẢNH BÁO ---
+    col_dept, col_alert = st.columns([7, 5])
 
-    st.dataframe(df_canh_bao, use_container_width=True, hide_index=True)
+    with col_dept:
+        st.markdown("##### PHÂN BỐ LỰC LƯỢNG")
+        st.markdown(
+            "**Nhân sự theo khoa / phòng** &nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;"
+            " <span style='font-size: 12px; color: gray; border: 1px solid"
+            " #ccc; padding: 2px 6px; border-radius: 4px;'>Đơn vị[cite: 11]</span>",
+            unsafe_allow_html=True,
+        )
+
+        # Xử lý dữ liệu khoa phòng thực tế từ file
+        if not df_emp.empty:
+            dept_col = None
+            for col in df_emp.columns:
+                if any(
+                    k in str(col).lower()
+                    for k in ["đơn vị", "khoa", "phòng", "bộ phận"]
+                ):
+                    dept_col = col
+                    break
+            if dept_col:
+                dept_counts = (
+                    df_emp[dept_col]
+                    .astype(str)
+                    .str.strip()
+                    .value_counts()
+                    .head(8)
+                )
+                df_dept = pd.DataFrame({
+                    "Khoa / Phòng": dept_counts.index,
+                    "Số lượng": dept_counts.values,
+                })
+            else:
+                df_dept = pd.DataFrame({
+                    "Khoa / Phòng": [
+                        "Khoa Khám bệnh",
+                        "Khoa Cấp cứu",
+                        "Khoa Ngoại Tổng hợp",
+                        "Khoa Xét nghiệm",
+                        "Phòng Tổ chức Cán bộ",
+                    ],
+                    "Số lượng": [120, 85, 95, 60, 42],
+                })
+        else:
+            df_dept = pd.DataFrame({
+                "Khoa / Phòng": [
+                    "Trung tâm Hỗ trợ Sinh sản",
+                    "Khoa Sản",
+                    "Khoa Ngoại Tổng hợp",
+                    "Khoa Chẩn đoán hình ảnh",
+                    "Khoa Gây mê hồi sức",
+                    "Khoa Nội 1",
+                    "Khoa Xét nghiệm 1",
+                    "Khoa Hồi sức CC",
+                ],
+                "Số lượng": [88, 78, 46, 43, 41, 39, 27, 27],
+            })
+
+        # Biểu đồ thanh ngang (Horizontal Bar Chart) chuẩn mẫu giao diện
+        fig_h = px.bar(
+            df_dept,
+            x="Số lượng",
+            y="Khoa / Phòng",
+            orientation="h",
+            text="Số lượng",
+            color="Số lượng",
+            color_continuous_scale=["#1B4D3E", "#2E8B57", "#3CB371"],
+        )
+        fig_h.update_traces(
+            textposition="outside", texttemplate="%{text}", cliponaxis=False
+        )
+        fig_h.update_layout(
+            xaxis_title="",
+            yaxis_title="",
+            showlegend=False,
+            height=320,
+            yaxis=dict(autorange="reversed"),
+            margin=dict(l=10, r=30, t=10, b=10),
+        )
+        st.plotly_chart(fig_h, use_container_width=True)
+
+    with col_alert:
+        c_head1, c_head2 = st.columns([3, 1])
+        with c_head1:
+            st.markdown("##### CẦN CHÚ Ý")
+            st.markdown(
+                "**Cảnh báo chưa đọc**",
+                unsafe_allow_html=True,
+            )
+        with c_head2:
+            st.markdown(
+                "<p style='text-align: right; font-size: 13px; color:"
+                " #0056b3; cursor: pointer;'>Xem tất cả ➔</p>",
+                unsafe_allow_html=True,
+            )
+
+        # Danh sách cảnh báo mô phỏng theo mẫu
+        st.markdown(
+            """
+            <div style="background-color: white; padding: 12px; border-radius: 6px; border: 1px solid #e0e0e0; margin-bottom: 8px;">
+                <div style="display: flex; justify-content: space-between; align-items: center;">
+                    <span style="font-weight: bold; font-size: 13px; color: #b71c1c;">🔴 Chứng chỉ hành nghề cần gia hạn</span>
+                    <span style="background-color: #ffebee; color: #c62828; padding: 2px 8px; border-radius: 10px; font-size: 11px;">● Cao</span>
+                </div>
+                <p style="margin: 4px 0 0 0; font-size: 12px; color: #555;">Trần Khánh Ngọc • Hạn 16/10/2026[cite: 11]</p>
+            </div>
+            <div style="background-color: white; padding: 12px; border-radius: 6px; border: 1px solid #e0e0e0; margin-bottom: 8px;">
+                <div style="display: flex; justify-content: space-between; align-items: center;">
+                    <span style="font-weight: bold; font-size: 13px; color: #e65100;">🟠 Hợp đồng sắp hết hạn</span>
+                    <span style="background-color: #fff3e0; color: #ef6c00; padding: 2px 8px; border-radius: 10px; font-size: 11px;">● Vừa</span>
+                </div>
+                <p style="margin: 4px 0 0 0; font-size: 12px; color: #555;">ĐD. Lê Quốc Bảo • Hạn 31/12/2026[cite: 11]</p>
+            </div>
+            <div style="background-color: white; padding: 12px; border-radius: 6px; border: 1px solid #e0e0e0;">
+                <div style="display: flex; justify-content: space-between; align-items: center;">
+                    <span style="font-weight: bold; font-size: 13px; color: #e65100;">🟠 Hợp đồng sắp hết hạn</span>
+                    <span style="background-color: #fff3e0; color: #ef6c00; padding: 2px 8px; border-radius: 10px; font-size: 11px;">● Vừa</span>
+                </div>
+                <p style="margin: 4px 0 0 0; font-size: 12px; color: #555;">Trần Hùng Mạnh • Hạn 31/12/2026[cite: 11]</p>
+            </div>
+            """,
+            unsafe_allow_html=True,
+        )
+
+    st.markdown("---")
+
+    # --- 3. KHỐI HOẠT ĐỘNG GẦN ĐÂY (DẤU VẾT VẬN HÀNH) ---
+    c_act_head1, c_act_head2 = st.columns([4, 1])
+    with c_act_head1:
+        st.markdown(
+            "<span style='font-size: 11px; color: gray; letter-spacing:"
+            " 1px;'>DẤU VẾT VẬN HÀNH</span>",
+            unsafe_allow_html=True,
+        )
+        st.markdown(
+            "##### Hoạt động gần đây",
+            unsafe_allow_html=True,
+        )
+    with c_act_head2:
+        st.markdown(
+            "<p style='text-align: right; font-size: 12px; color:"
+            " gray;'>Cập nhật tự động[cite: 11]</p>",
+            unsafe_allow_html=True,
+        )
+
+    st.markdown(
+        """
+        <div style="background-color: white; padding: 15px; border-radius: 8px; border: 1px solid #e0e0e0;">
+            <div style="display: flex; justify-content: space-between; margin-bottom: 10px;">
+                <div>
+                    <p style="margin: 0; font-size: 13px; font-weight: bold;">🟢 Đã lưu trữ hồ sơ BS. Nguyễn Minh Anh.</p>
+                    <p style="margin: 0; font-size: 11px; color: gray;">Phòng Nhân sự • 10:07 23-09[cite: 11]</p>
+                </div>
+                <div>
+                    <p style="margin: 0; font-size: 13px; font-weight: bold;">🟢 Đã lưu trữ hồ sơ BS. Vũ Hoàng Nam.</p>
+                    <p style="margin: 0; font-size: 11px; color: gray;">Phòng Nhân sự • 10:07 23-09[cite: 11]</p>
+                </div>
+            </div>
+            <hr style="margin: 8px 0; border: none; border-top: 1px solid #eee;">
+            <div style="display: flex; justify-content: space-between; margin-bottom: 10px;">
+                <div>
+                    <p style="margin: 0; font-size: 13px; font-weight: bold;">🔵 Hệ thống tạo cảnh báo gia hạn chứng chỉ cho BS. Vũ Hoàng Nam.</p>
+                    <p style="margin: 0; font-size: 11px; color: gray;">Hệ thống • 09:34 23-09[cite: 11]</p>
+                </div>
+                <div>
+                    <p style="margin: 0; font-size: 13px; font-weight: bold;">🔵 CN. Trần Thu Hà đã cập nhật thông tin đào tạo.</p>
+                    <p style="margin: 0; font-size: 11px; color: gray;">Phòng Nhân sự • 09:34 23-09[cite: 11]</p>
+                </div>
+            </div>
+            <hr style="margin: 8px 0; border: none; border-top: 1px solid #eee;">
+            <div>
+                <p style="margin: 0; font-size: 13px; font-weight: bold;">🔵 Báo cáo biến động nhân sự tháng 09/2026 đã được xuất.</p>
+                <p style="margin: 0; font-size: 11px; color: gray;">CN. Trần Thu Hà • 09:34 23-09[cite: 11]</p>
+            </div>
+        </div>
+        """,
+        unsafe_allow_html=True,
+    )
 
 
 # ---------------------------------------------------------
@@ -177,7 +306,6 @@ def render_dashboard():
 # ---------------------------------------------------------
 st.sidebar.title("MENU QUẢN TRỊ CÁN BỘ")
 st.sidebar.markdown("---")
-
 menu_choice = st.sidebar.radio(
     "Chọn chức năng:",
     [
@@ -195,7 +323,7 @@ menu_choice = st.sidebar.radio(
         "12. 🎓 Quản lý Đào tạo & Bồi dưỡng CML",
         "13. 🏆 Đánh giá & Đánh giá An toàn Bệnh viện",
         "14. 🎖️ Thi đua - Khen thưởng & Kỷ luật",
-        "15. 🏥 Quản lý Sức khỏe & Báo hiểm",
+        "15. 🏥 Quản lý Sức khỏe & Bảo hiểm",
         "16. 📋 Quản lý Tài sản - Quy trình",
         "17. 📈 Báo cáo - Thống kê - CSDL Y tế",
         "18. ⚙️ Quản lý Hệ thống & Phân quyền",
@@ -213,7 +341,7 @@ elif "Quản lý Cơ cấu Tổ chức" in menu_choice:
     render_organization_management()
 elif "Quản lý Hồ sơ Cán bộ" in menu_choice:
     render_employee_management()
-elif "Chấm công" in menu_choice:  # Thêm điều kiện này cho Menu 8
+elif "Chấm công" in menu_choice:
     render_timekeeping_management()
 else:
     st.title(menu_choice)
