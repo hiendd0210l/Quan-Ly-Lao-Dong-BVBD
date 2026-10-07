@@ -1,5 +1,4 @@
 from datetime import datetime
-import numpy as np
 import pandas as pd
 import plotly.express as px
 import streamlit as st
@@ -32,7 +31,7 @@ st.markdown(
 
 
 # ---------------------------------------------------------
-# 2. HÀM XỬ LÝ NGÀY SINH THÔNG MINH
+# 2. HÀM BÓC TÁCH THÁNG SINH CHUẨN XÁC TỪ DỮ LIỆU THẬT
 # ---------------------------------------------------------
 def extract_month_from_value(val):
     if pd.isna(val) or val is None:
@@ -42,15 +41,18 @@ def extract_month_from_value(val):
         return val.month
 
     s = str(val).strip()
-    if not s or s.lower() in ["nan", "nat", "none", ""]:
+    if not s or s.lower() in ["nan", "nat", "none", "", "không"]:
         return None
 
+    # Hỗ trợ phân tách các định dạng chuẩn ngày/tháng/năm (ví dụ: 12/12/1985 hoặc 1985-12-12)
     for sep in ["/", "-", "."]:
         if sep in s:
             parts = s.split(sep)
             if len(parts) >= 3:
-                for p in parts:
-                    if p.isdigit():
+                # Nếu định dạng DD/MM/YYYY -> phần tử thứ 2 là tháng
+                # Nếu định dạng YYYY/MM/DD -> phần tử thứ 2 cũng là tháng
+                for idx, p in enumerate(parts):
+                    if idx in [1, 2] and p.isdigit():
                         val_int = int(p)
                         if 1 <= val_int <= 12 and len(p) <= 2:
                             return val_int
@@ -88,7 +90,7 @@ def is_management_position(pos_str):
 
 
 # ---------------------------------------------------------
-# 3. HÀM HIỂN THỊ DASHBOARD
+# 3. HÀM HIỂN THỊ DASHBOARD DỮ LIỆU THẬT 100%
 # ---------------------------------------------------------
 def render_dashboard():
     df_emp = pd.DataFrame()
@@ -97,29 +99,7 @@ def render_dashboard():
         if isinstance(df_ses, pd.DataFrame) and not df_ses.empty:
             df_emp = df_ses.copy()
 
-    if df_emp.empty:
-        np.random.seed(42)
-        sample_names = [
-            "Nguyễn Văn An",
-            "Trần Thị Bích",
-            "Lê Hoàng Cường",
-            "Phạm Minh Đức",
-            "Vũ Thị Dung",
-        ]
-        sample_pos = ["Trưởng khoa", "Bác sĩ", "Điều dưỡng", "Phó phòng", "KTV"]
-        sample_units = ["Khoa Khám bệnh", "Khoa Cấp cứu", "Khoa Ngoại Tổng hợp"]
-        sample_dob = ["15/10/1985", "20/10/1990", "05/10/1982", "12/12/1975", "08/03/1992"]
-
-        df_emp = pd.DataFrame({
-            "Mã NV": [f"BV{i:04d}" for i in range(1, 843)],
-            "Họ và tên": np.random.choice(sample_names, 842),
-            "Ngày sinh": np.random.choice(sample_dob, 842),
-            "Chức vụ": np.random.choice(sample_pos, 842),
-            "Đơn vị công tác": np.random.choice(sample_units, 842),
-        })
-        st.session_state["employees_profile"] = df_emp
-
-    total_emp = len(df_emp)
+    total_emp = len(df_emp) if not df_emp.empty else 0
 
     # --- TIÊU ĐỀ & NÚT TÁC VỤ NHANH ---
     col_t1, col_t2 = st.columns([4, 1])
@@ -145,6 +125,14 @@ def render_dashboard():
             st.rerun()
 
     st.markdown("---")
+
+    if df_emp.empty:
+        st.warning(
+            "⚠️ Chưa có dữ liệu hồ sơ cán bộ. Vui lòng tải tệp Excel lên tại"
+            " mục **'Hồ sơ nhân sự'** để hệ thống kết nối và thống kê chính"
+            " xác."
+        )
+        return
 
     # --- 1. 5 THẺ CHỈ SỐ TỔNG QUAN ---
     m1, m2, m3, m4, m5 = st.columns(5)
@@ -217,7 +205,7 @@ def render_dashboard():
     st.write("")
 
     # =========================================================
-    # 2. THỐNG KÊ & DANH SÁCH SINH NHẬT NHÂN SỰ THEO THÁNG
+    # 2. THỐNG KÊ & DANH SÁCH SINH NHẬT TỪ DỮ LIỆU THẬT
     # =========================================================
     st.markdown("---")
     st.markdown(
