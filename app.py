@@ -1,3 +1,4 @@
+from datetime import datetime
 import pandas as pd
 import plotly.express as px
 import streamlit as st
@@ -15,38 +16,14 @@ st.set_page_config(
     layout="wide",
 )
 
-# Tùy chỉnh CSS để làm menu sidebar có màu xanh đen tối sang trọng giống mẫu
 st.markdown(
     """
     <style>
-        /* Màu nền tổng thể trang */
-        .stApp {
-            background-color: #f8fafc;
-        }
-        /* Tùy chỉnh Sidebar */
-        [data-testid="stSidebar"] {
-            background-color: #0f172a;
-            color: #ffffff;
-        }
-        [data-testid="stSidebar"] .stRadio label {
-            color: #cbd5e1 !important;
-            font-size: 13px;
-        }
-        [data-testid="stSidebar"] .stRadio label:hover {
-            color: #ffffff !important;
-            background-color: #1e293b;
-            border-radius: 4px;
-        }
-        /* Tiêu đề nhóm trong sidebar */
-        .sidebar-section-title {
-            font-size: 11px;
-            text-transform: uppercase;
-            color: #64748b;
-            font-weight: bold;
-            margin-top: 15px;
-            margin-bottom: 5px;
-            letter-spacing: 0.5px;
-        }
+        .stApp { background-color: #f8fafc; }
+        [data-testid="stSidebar"] { background-color: #0f172a; color: #ffffff; }
+        [data-testid="stSidebar"] .stRadio label { color: #cbd5e1 !important; font-size: 13px; }
+        [data-testid="stSidebar"] .stRadio label:hover { color: #ffffff !important; background-color: #1e293b; border-radius: 4px; }
+        .sidebar-section-title { font-size: 11px; text-transform: uppercase; color: #64748b; font-weight: bold; margin-top: 15px; margin-bottom: 5px; letter-spacing: 0.5px; }
     </style>
 """,
     unsafe_allow_html=True,
@@ -54,17 +31,58 @@ st.markdown(
 
 
 # ---------------------------------------------------------
-# 2. HÀM HIỂN THỊ DASHBOARD THEO ĐÚNG MẪU GIAO DIỆN
+# 2. HÀM HỖ TRỢ XỬ LÝ SINH NHẬT VÀ QUẢN LÝ
+# ---------------------------------------------------------
+def parse_birth_month(val):
+    if pd.isna(val) or not val:
+        return None
+    s = str(val).strip()
+    # Thử quét định dạng ngày tháng phổ biến (DD/MM/YYYY hoặc YYYY-MM-DD)
+    try:
+        if "/" in s:
+            parts = s.split("/")
+            if len(parts) >= 2:
+                return int(parts[1])
+        elif "-" in s:
+            parts = s.split("-")
+            if len(parts) >= 3:
+                return int(parts[1])
+        # Nếu chuỗi chứa ngày tháng dạng datetime
+        dt = pd.to_datetime(val, errors="coerce")
+        if not pd.isna(dt):
+            return dt.month
+    except Exception:
+        pass
+    return None
+
+
+def is_management_position(pos_str):
+    if pd.isna(pos_str):
+        return False
+    p = str(pos_str).lower()
+    keywords = [
+        "trưởng",
+        "phó",
+        "giám đốc",
+        "phụ trách",
+        "tổ trưởng",
+        "điều dưỡng trưởng",
+        "kế toán trưởng",
+    ]
+    return any(kw in p for kw in keywords)
+
+
+# ---------------------------------------------------------
+# 3. HÀM HIỂN THỊ DASHBOARD
 # ---------------------------------------------------------
 def render_dashboard():
-    # Lấy dữ liệu thực tế từ Session State (Menu Quản lý Hồ sơ Cán bộ)
     df_emp = pd.DataFrame()
     if "employees_profile" in st.session_state:
         df_ses = st.session_state["employees_profile"]
         if isinstance(df_ses, pd.DataFrame) and not df_ses.empty:
             df_emp = df_ses.copy()
 
-    total_emp = len(df_emp) if not df_emp.empty else 842  # Lấy 842 lao động thực tế làm chuẩn
+    total_emp = len(df_emp) if not df_emp.empty else 842
 
     # --- TIÊU ĐỀ & NÚT TÁC VỤ NHANH ---
     col_t1, col_t2 = st.columns([4, 1])
@@ -85,9 +103,7 @@ def render_dashboard():
             unsafe_allow_html=True,
         )
     with col_t2:
-        st.markdown(
-            "<br>", unsafe_allow_html=True
-        )  # Canh chỉnh khoảng cách nút
+        st.markdown("<br>", unsafe_allow_html=True)
         if st.button("Mở danh sách hồ sơ ➔", type="primary"):
             st.rerun()
 
@@ -162,15 +178,151 @@ def render_dashboard():
         )
 
     st.write("")
-    st.write("")
 
-    # --- 2. BIỂU ĐỒ KHOA/PHÒNG & CẢNH BÁO CHƯA ĐỌC ---
+    # =========================================================
+    # 2. THÔNG BÁO & DANH SÁCH SINH NHẬT NHÂN SỰ THEO THÁNG
+    # =========================================================
+    st.markdown("---")
+    st.markdown(
+        "🎂 **THỐNG KÊ NHÂN SỰ CÓ SINH NHẬT TRONG THÁNG**",
+        unsafe_allow_html=True,
+    )
+
+    current_month = datetime.now().month
+    col_s1, col_s2, col_s3 = st.columns([2, 3, 6])
+    with col_s1:
+        selected_birth_month = st.selectbox(
+            "Chọn tháng sinh nhật:",
+            list(range(1, 13)),
+            index=current_month - 1,
+            key="sb_birth_month",
+        )
+
+    # Xử lý lọc danh sách sinh nhật theo tháng
+    birthday_count = 0
+    df_birthday_filtered = pd.DataFrame()
+
+    if not df_emp.empty:
+        # Tìm cột ngày sinh
+        dob_col = None
+        for col in df_emp.columns:
+            if any(
+                k in str(col).lower()
+                for k in ["ngày sinh", "năm sinh", "dob", "ngay_sinh"]
+            ):
+                dob_col = col
+                break
+
+        if dob_col:
+            df_emp["_thang_sinh"] = df_emp[dob_col].apply(parse_birth_month)
+            df_birthday_filtered = df_emp[
+                df_emp["_thang_sinh"] == selected_birth_month
+            ].copy()
+            birthday_count = len(df_birthday_filtered)
+
+    with col_s2:
+        st.metric(
+            label=f"Số lượng nhân sự sinh nhật Tháng {selected_birth_month}",
+            value=f"{birthday_count} cán bộ",
+        )
+
+    with col_s3:
+        st.write("")
+        show_birthday_list = st.checkbox(
+            f"📋 Xem danh sách chi tiết cán bộ sinh nhật tháng {selected_birth_month}"
+        )
+
+    if show_birthday_list:
+        if birthday_count > 0:
+            # Nhận diện các cột tương ứng
+            id_col, name_col, pos_col, title_col, unit_col, dob_col_real = (
+                None,
+                None,
+                None,
+                None,
+                None,
+                None,
+            )
+            for col in df_birthday_filtered.columns:
+                c_low = str(col).lower()
+                if not id_col and any(
+                    k in c_low for k in ["mã nv", "mã cb", "ma_nv", "id"]
+                ):
+                    id_col = col
+                elif not name_col and any(
+                    k in c_low for k in ["họ và tên", "họ tên", "tên", "name"]
+                ):
+                    name_col = col
+                elif not pos_col and any(
+                    k in c_low for k in ["chức vụ", "chuc_vu"]
+                ):
+                    pos_col = col
+                elif not title_col and any(
+                    k in c_low for k in ["chức danh", "chuc_danh", "vị trí"]
+                ):
+                    title_col = col
+                elif not unit_col and any(
+                    k in c_low
+                    for k in ["đơn vị", "khoa", "phòng", "bộ phận", "don_vi"]
+                ):
+                    unit_col = col
+                elif not dob_col_real and any(
+                    k in c_low for k in ["ngày sinh", "dob", "ngay_sinh"]
+                ):
+                    dob_col_real = col
+
+            list_data = []
+            for _, r in df_birthday_filtered.iterrows():
+                cv = str(r.get(pos_col) or "").strip() if pos_col else ""
+                list_data.append({
+                    "Mã NV": str(r.get(id_col) or "").strip()
+                    if id_col
+                    else "",
+                    "Họ và tên": str(r.get(name_col) or "").strip()
+                    if name_col
+                    else "",
+                    "Chức vụ": cv,
+                    "Chức danh": str(r.get(title_col) or "").strip()
+                    if title_col
+                    else "",
+                    "Đơn vị công tác": str(r.get(unit_col) or "").strip()
+                    if unit_col
+                    else "",
+                    "Ngày sinh": str(r.get(dob_col_real) or "").strip()
+                    if dob_col_real
+                    else "",
+                    "_is_quan_ly": is_management_position(cv),
+                })
+
+            df_out = pd.DataFrame(list_data)
+            # Sắp xếp: Quản lý lên trên (_is_quan_ly = True xếp trước)
+            df_out = df_out.sort_values(
+                by="_is_quan_ly", ascending=False
+            ).reset_index(drop=True)
+            df_out.insert(0, "STT", range(1, len(df_out) + 1))
+            df_out = df_out.drop(columns=["_is_quan_ly"])
+
+            st.success(
+                f"🎉 Đã tìm thấy {len(df_out)} cán bộ sinh nhật trong tháng"
+                f" {selected_birth_month} (Đã ưu tiên xếp cán bộ quản lý lên"
+                " đầu bảng):"
+            )
+            st.dataframe(df_out, use_container_width=True, hide_index=True)
+        else:
+            st.info(
+                f"Không có cán bộ nào có ngày sinh trong tháng"
+                f" {selected_birth_month}."
+            )
+
+    st.markdown("---")
+
+    # --- 3. BIỂU ĐỒ KHOA/PHÒNG & CẢNH BÁO CHƯA ĐỌC ---
     col_dept, col_alert = st.columns([7, 5])
 
     with col_dept:
         st.markdown(
-            "<span style='font-size: 11px; color: #64748b; font-weight: bold;'>PHÂN"
-            " BỐ LỰC LƯỢNG</span>",
+            "<span style='font-size: 11px; color: #64748b; font-weight:"
+            " bold;'>PHÂN BỐ LỰC LƯỢNG</span>",
             unsafe_allow_html=True,
         )
         st.markdown(
@@ -178,7 +330,6 @@ def render_dashboard():
             unsafe_allow_html=True,
         )
 
-        # Xử lý dữ liệu thực tế từ hồ sơ
         if not df_emp.empty:
             dept_col = None
             for col in df_emp.columns:
@@ -298,7 +449,7 @@ def render_dashboard():
 
     st.markdown("---")
 
-    # --- 3. KHỐI HOẠT ĐỘNG GẦN ĐÂY (DẤU VẾT VẬN HÀNH) ---
+    # --- 4. KHỐI HOẠT ĐỘNG GẦN ĐÂY ---
     c_act_head1, c_act_head2 = st.columns([4, 1])
     with c_act_head1:
         st.markdown(
@@ -353,7 +504,7 @@ def render_dashboard():
 
 
 # ---------------------------------------------------------
-# 3. THANH MENU BÊN TRÁI (SIDEBAR) ĐẦY ĐỦ CÁC NHÓM
+# 4. THANH MENU BÊN TRÁI (SIDEBAR) ĐẦY ĐỦ
 # ---------------------------------------------------------
 with st.sidebar:
     st.markdown(
@@ -442,7 +593,7 @@ with st.sidebar:
     )
 
 # ---------------------------------------------------------
-# 4. ĐIỀU HƯỚNG TRANG DỰA TRÊN MENU LỰA CHỌN
+# 5. ĐIỀU HƯỚNG TRANG DỰA TRÊN MENU LỰA CHỌN
 # ---------------------------------------------------------
 if "Tổng quan" in menu_choice:
     render_dashboard()
