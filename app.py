@@ -7,7 +7,7 @@ from organization_management import render_organization_management
 from timekeeping_management import render_timekeeping_management
 
 # ---------------------------------------------------------
-# 1. CẤU HÌNH TRANG STREAMLIT
+# 1. CẤU HÌNH GIAO DIỆN & MÀU SẮC CHUẨN MẪU
 # ---------------------------------------------------------
 st.set_page_config(
     page_title="Hệ thống Quản lý Nhân sự - Bệnh viện Bưu điện",
@@ -15,9 +15,46 @@ st.set_page_config(
     layout="wide",
 )
 
+# Tùy chỉnh CSS để làm menu sidebar có màu xanh đen tối sang trọng giống mẫu
+st.markdown(
+    """
+    <style>
+        /* Màu nền tổng thể trang */
+        .stApp {
+            background-color: #f8fafc;
+        }
+        /* Tùy chỉnh Sidebar */
+        [data-testid="stSidebar"] {
+            background-color: #0f172a;
+            color: #ffffff;
+        }
+        [data-testid="stSidebar"] .stRadio label {
+            color: #cbd5e1 !important;
+            font-size: 13px;
+        }
+        [data-testid="stSidebar"] .stRadio label:hover {
+            color: #ffffff !important;
+            background-color: #1e293b;
+            border-radius: 4px;
+        }
+        /* Tiêu đề nhóm trong sidebar */
+        .sidebar-section-title {
+            font-size: 11px;
+            text-transform: uppercase;
+            color: #64748b;
+            font-weight: bold;
+            margin-top: 15px;
+            margin-bottom: 5px;
+            letter-spacing: 0.5px;
+        }
+    </style>
+""",
+    unsafe_allow_html=True,
+)
+
 
 # ---------------------------------------------------------
-# 2. HÀM HIỂN THỊ DASHBOARD THEO MẪU CHUẨN
+# 2. HÀM HIỂN THỊ DASHBOARD THEO ĐÚNG MẪU GIAO DIỆN
 # ---------------------------------------------------------
 def render_dashboard():
     # Lấy dữ liệu thực tế từ Session State (Menu Quản lý Hồ sơ Cán bộ)
@@ -27,64 +64,72 @@ def render_dashboard():
         if isinstance(df_ses, pd.DataFrame) and not df_ses.empty:
             df_emp = df_ses.copy()
 
-    total_emp = len(df_emp) if not df_emp.empty else 842  # Lấy 842 làm mặc định hoặc số thực tế
+    total_emp = len(df_emp) if not df_emp.empty else 842  # Lấy 842 lao động thực tế làm chuẩn
 
-    # --- TIÊU ĐỀ VÀ NÚT TÁC VỤ NHANH ---
+    # --- TIÊU ĐỀ & NÚT TÁC VỤ NHANH ---
     col_t1, col_t2 = st.columns([4, 1])
     with col_t1:
         st.markdown(
-            "<h2 style='color: #002060; margin-bottom: 0px;'>Tổng quan hệ"
-            " thống nhân sự</h2>",
+            "<span style='font-size: 11px; color: #64748b; letter-spacing: 1px;'>TRUNG"
+            " TÂM ĐIỀU HÀNH • HÔM NAY</span>",
             unsafe_allow_html=True,
         )
         st.markdown(
-            "<p style='color: #555; font-size: 14px;'>Một nhịp nhìn rõ ràng"
+            "<h2 style='color: #0f172a; margin-top: 0px; margin-bottom:"
+            " 2px;'>Tổng quan nhân sự</h2>",
+            unsafe_allow_html=True,
+        )
+        st.markdown(
+            "<p style='color: #64748b; font-size: 13px;'>Một nhịp nhìn rõ ràng"
             " cho những việc cần xử lý đúng hạn[cite: 11].</p>",
             unsafe_allow_html=True,
         )
     with col_t2:
+        st.markdown(
+            "<br>", unsafe_allow_html=True
+        )  # Canh chỉnh khoảng cách nút
         if st.button("Mở danh sách hồ sơ ➔", type="primary"):
             st.rerun()
 
     st.markdown("---")
 
-    # --- 1. 5 THẺ CHỈ SỐ TỔNG QUAN (METRICS CARDS MẪU) ---
+    # --- 1. 5 THẺ CHỈ SỐ TỔNG QUAN (METRICS CARDS) ---
     m1, m2, m3, m4, m5 = st.columns(5)
-    
+
     with m1:
         st.markdown(
-            """
-            <div style="background-color: white; padding: 15px; border-radius: 8px; border-left: 4px solid #1F497D; box-shadow: 0 1px 3px rgba(0,0,0,0.1);">
-                <span style="font-size: 12px; color: gray;">01-01</span>
-                <h2 style="margin: 5px 0; color: #1F497D;">{}</h2>
-                <p style="margin: 0; font-size: 13px; font-weight: bold;">Tổng số nhân sự</p>
-                <p style="margin: 0; font-size: 11px; color: gray;">trong biên chế & hợp đồng[cite: 11]</p>
+            f"""
+            <div style="background-color: white; padding: 16px; border-radius: 8px; border: 1px solid #e2e8f0; border-top: 3px solid #0f172a; box-shadow: 0 1px 2px rgba(0,0,0,0.05);">
+                <span style="font-size: 11px; color: #94a3b8; font-family: monospace;">01-01</span>
+                <h2 style="margin: 4px 0; color: #0f172a; font-size: 24px;">{total_emp}</h2>
+                <p style="margin: 0; font-size: 13px; font-weight: 600; color: #1e293b;">Tổng số nhân sự</p>
+                <p style="margin: 0; font-size: 11px; color: #64748b;">trong biên chế & hợp đồng[cite: 11]</p>
             </div>
-            """.format(total_emp),
+            """,
             unsafe_allow_html=True,
         )
 
     with m2:
         st.markdown(
-            """
-            <div style="background-color: white; padding: 15px; border-radius: 8px; border-left: 4px solid #274E13; box-shadow: 0 1px 3px rgba(0,0,0,0.1);">
-                <span style="font-size: 12px; color: gray;">01-02</span>
-                <h2 style="margin: 5px 0; color: #274E13;">{}</h2>
-                <p style="margin: 0; font-size: 13px; font-weight: bold;">Đang làm việc</p>
-                <p style="margin: 0; font-size: 11px; color: gray;">100% tổng hồ sơ[cite: 11]</p>
+            f"""
+            <div style="background-color: white; padding: 16px; border-radius: 8px; border: 1px solid #e2e8f0; border-top: 3px solid #10b981; box-shadow: 0 1px 2px rgba(0,0,0,0.05);">
+                <span style="font-size: 11px; color: #94a3b8; font-family: monospace;">01-02</span>
+                <h2 style="margin: 4px 0; color: #10b981; font-size: 24px;">{total_emp}</h2>
+                <p style="margin: 0; font-size: 13px; font-weight: 600; color: #1e293b;">Đang làm việc</p>
+                <p style="margin: 0; font-size: 11px; color: #64748b;">100% tổng hồ sơ[cite: 11]</p>
             </div>
-            """.format(total_emp),
+            """,
             unsafe_allow_html=True,
         )
 
     with m3:
         st.markdown(
             """
-            <div style="background-color: white; padding: 15px; border-radius: 8px; border-left: 4px solid #E37D00; box-shadow: 0 1px 3px rgba(0,0,0,0.1);">
-                <span style="font-size: 12px; color: gray;">01-03</span>
-                <h2 style="margin: 5px 0; color: #E37D00;">0</h2>
-                <p style="margin: 0; font-size: 13px; font-weight: bold;">Gia nhập tháng này</p>
-                <p style="margin: 0; font-size: 11px; color: gray;">hồ sơ mới cập nhật[cite: 11]</p>
+            <div style="background-color: white; padding: 16px; border-radius: 8px; border: 1px solid #e2e8f0; border-top: 3px solid #f59e0b; box-shadow: 0 1px 2px rgba(0,0,0,0.05);">
+                <span style="font-size: 11px; color: #94a3b8; font-family: monospace;">01-03</span>
+                <h2 style="margin: 4px 0; color: #f59e0b; font-size: 24px;">0</h2>
+                <p style="margin: 0; font-size: 13px; font-weight: 600; color: #1e293b;">Gia nhập tháng này</p>
+                <p style="margin: 0; font-size: 11px; color: #64748b;">hồ sơ mới cập nhật[cite: 11]</p>
             </div>
             """,
             unsafe_allow_html=True,
@@ -93,11 +138,11 @@ def render_dashboard():
     with m4:
         st.markdown(
             """
-            <div style="background-color: white; padding: 15px; border-radius: 8px; border-left: 4px solid #C00000; box-shadow: 0 1px 3px rgba(0,0,0,0.1);">
-                <span style="font-size: 12px; color: gray;">01-04</span>
-                <h2 style="margin: 5px 0; color: #C00000;">4</h2>
-                <p style="margin: 0; font-size: 13px; font-weight: bold;">Hồ sơ sắp hết hạn</p>
-                <p style="margin: 0; font-size: 11px; color: gray;">cần rà soát sớm[cite: 11]</p>
+            <div style="background-color: white; padding: 16px; border-radius: 8px; border: 1px solid #e2e8f0; border-top: 3px solid #ef4444; box-shadow: 0 1px 2px rgba(0,0,0,0.05);">
+                <span style="font-size: 11px; color: #94a3b8; font-family: monospace;">01-04</span>
+                <h2 style="margin: 4px 0; color: #ef4444; font-size: 24px;">4</h2>
+                <p style="margin: 0; font-size: 13px; font-weight: 600; color: #1e293b;">Hồ sơ sắp hết hạn</p>
+                <p style="margin: 0; font-size: 11px; color: #64748b;">cần rà soát sớm[cite: 11]</p>
             </div>
             """,
             unsafe_allow_html=True,
@@ -106,11 +151,11 @@ def render_dashboard():
     with m5:
         st.markdown(
             """
-            <div style="background-color: white; padding: 15px; border-radius: 8px; border-left: 4px solid #7030A0; box-shadow: 0 1px 3px rgba(0,0,0,0.1);">
-                <span style="font-size: 12px; color: gray;">01-05</span>
-                <h2 style="margin: 5px 0; color: #7030A0;">3</h2>
-                <p style="margin: 0; font-size: 13px; font-weight: bold;">Cảnh báo chưa đọc</p>
-                <p style="margin: 0; font-size: 11px; color: gray;">đang chờ xử lý[cite: 11]</p>
+            <div style="background-color: white; padding: 16px; border-radius: 8px; border: 1px solid #e2e8f0; border-top: 3px solid #8b5cf6; box-shadow: 0 1px 2px rgba(0,0,0,0.05);">
+                <span style="font-size: 11px; color: #94a3b8; font-family: monospace;">01-05</span>
+                <h2 style="margin: 4px 0; color: #8b5cf6; font-size: 24px;">3</h2>
+                <p style="margin: 0; font-size: 13px; font-weight: 600; color: #1e293b;">Cảnh báo chưa đọc</p>
+                <p style="margin: 0; font-size: 11px; color: #64748b;">đang chờ xử lý[cite: 11]</p>
             </div>
             """,
             unsafe_allow_html=True,
@@ -119,19 +164,21 @@ def render_dashboard():
     st.write("")
     st.write("")
 
-    # --- 2. KHU VỰC BIỂU ĐỒ KHOA/PHÒNG & CẢNH BÁO ---
+    # --- 2. BIỂU ĐỒ KHOA/PHÒNG & CẢNH BÁO CHƯA ĐỌC ---
     col_dept, col_alert = st.columns([7, 5])
 
     with col_dept:
-        st.markdown("##### PHÂN BỐ LỰC LƯỢNG")
         st.markdown(
-            "**Nhân sự theo khoa / phòng** &nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;"
-            " <span style='font-size: 12px; color: gray; border: 1px solid"
-            " #ccc; padding: 2px 6px; border-radius: 4px;'>Đơn vị[cite: 11]</span>",
+            "<span style='font-size: 11px; color: #64748b; font-weight: bold;'>PHÂN"
+            " BỐ LỰC LƯỢNG</span>",
+            unsafe_allow_html=True,
+        )
+        st.markdown(
+            "**Nhân sự theo khoa / phòng**",
             unsafe_allow_html=True,
         )
 
-        # Xử lý dữ liệu khoa phòng thực tế từ file
+        # Xử lý dữ liệu thực tế từ hồ sơ
         if not df_emp.empty:
             dept_col = None
             for col in df_emp.columns:
@@ -179,7 +226,6 @@ def render_dashboard():
                 "Số lượng": [88, 78, 46, 43, 41, 39, 27, 27],
             })
 
-        # Biểu đồ thanh ngang (Horizontal Bar Chart) chuẩn mẫu giao diện
         fig_h = px.bar(
             df_dept,
             x="Số lượng",
@@ -187,7 +233,7 @@ def render_dashboard():
             orientation="h",
             text="Số lượng",
             color="Số lượng",
-            color_continuous_scale=["#1B4D3E", "#2E8B57", "#3CB371"],
+            color_continuous_scale=["#0f766e", "#14b8a6", "#2dd4bf"],
         )
         fig_h.update_traces(
             textposition="outside", texttemplate="%{text}", cliponaxis=False
@@ -199,13 +245,19 @@ def render_dashboard():
             height=320,
             yaxis=dict(autorange="reversed"),
             margin=dict(l=10, r=30, t=10, b=10),
+            plot_bgcolor="rgba(0,0,0,0)",
+            paper_bgcolor="rgba(0,0,0,0)",
         )
         st.plotly_chart(fig_h, use_container_width=True)
 
     with col_alert:
         c_head1, c_head2 = st.columns([3, 1])
         with c_head1:
-            st.markdown("##### CẦN CHÚ Ý")
+            st.markdown(
+                "<span style='font-size: 11px; color: #64748b; font-weight:"
+                " bold;'>CẦN CHÚ Ý</span>",
+                unsafe_allow_html=True,
+            )
             st.markdown(
                 "**Cảnh báo chưa đọc**",
                 unsafe_allow_html=True,
@@ -213,33 +265,32 @@ def render_dashboard():
         with c_head2:
             st.markdown(
                 "<p style='text-align: right; font-size: 13px; color:"
-                " #0056b3; cursor: pointer;'>Xem tất cả ➔</p>",
+                " #2563eb; cursor: pointer;'>Xem tất cả ➔</p>",
                 unsafe_allow_html=True,
             )
 
-        # Danh sách cảnh báo mô phỏng theo mẫu
         st.markdown(
             """
-            <div style="background-color: white; padding: 12px; border-radius: 6px; border: 1px solid #e0e0e0; margin-bottom: 8px;">
+            <div style="background-color: white; padding: 12px; border-radius: 6px; border: 1px solid #e2e8f0; margin-bottom: 8px;">
                 <div style="display: flex; justify-content: space-between; align-items: center;">
-                    <span style="font-weight: bold; font-size: 13px; color: #b71c1c;">🔴 Chứng chỉ hành nghề cần gia hạn</span>
-                    <span style="background-color: #ffebee; color: #c62828; padding: 2px 8px; border-radius: 10px; font-size: 11px;">● Cao</span>
+                    <span style="font-weight: bold; font-size: 13px; color: #b91c1c;">🔴 Chứng chỉ hành nghề cần gia hạn</span>
+                    <span style="background-color: #fee2e2; color: #b91c1c; padding: 2px 8px; border-radius: 10px; font-size: 11px;">● Cao</span>
                 </div>
-                <p style="margin: 4px 0 0 0; font-size: 12px; color: #555;">Trần Khánh Ngọc • Hạn 16/10/2026[cite: 11]</p>
+                <p style="margin: 4px 0 0 0; font-size: 12px; color: #475569;">Trần Khánh Ngọc • Hạn 16/10/2026[cite: 11]</p>
             </div>
-            <div style="background-color: white; padding: 12px; border-radius: 6px; border: 1px solid #e0e0e0; margin-bottom: 8px;">
+            <div style="background-color: white; padding: 12px; border-radius: 6px; border: 1px solid #e2e8f0; margin-bottom: 8px;">
                 <div style="display: flex; justify-content: space-between; align-items: center;">
-                    <span style="font-weight: bold; font-size: 13px; color: #e65100;">🟠 Hợp đồng sắp hết hạn</span>
-                    <span style="background-color: #fff3e0; color: #ef6c00; padding: 2px 8px; border-radius: 10px; font-size: 11px;">● Vừa</span>
+                    <span style="font-weight: bold; font-size: 13px; color: #c2410c;">🟠 Hợp đồng sắp hết hạn</span>
+                    <span style="background-color: #ffedd5; color: #c2410c; padding: 2px 8px; border-radius: 10px; font-size: 11px;">● Vừa</span>
                 </div>
-                <p style="margin: 4px 0 0 0; font-size: 12px; color: #555;">ĐD. Lê Quốc Bảo • Hạn 31/12/2026[cite: 11]</p>
+                <p style="margin: 4px 0 0 0; font-size: 12px; color: #475569;">ĐD. Lê Quốc Bảo • Hạn 31/12/2026[cite: 11]</p>
             </div>
-            <div style="background-color: white; padding: 12px; border-radius: 6px; border: 1px solid #e0e0e0;">
+            <div style="background-color: white; padding: 12px; border-radius: 6px; border: 1px solid #e2e8f0;">
                 <div style="display: flex; justify-content: space-between; align-items: center;">
-                    <span style="font-weight: bold; font-size: 13px; color: #e65100;">🟠 Hợp đồng sắp hết hạn</span>
-                    <span style="background-color: #fff3e0; color: #ef6c00; padding: 2px 8px; border-radius: 10px; font-size: 11px;">● Vừa</span>
+                    <span style="font-weight: bold; font-size: 13px; color: #c2410c;">🟠 Hợp đồng sắp hết hạn</span>
+                    <span style="background-color: #ffedd5; color: #c2410c; padding: 2px 8px; border-radius: 10px; font-size: 11px;">● Vừa</span>
                 </div>
-                <p style="margin: 4px 0 0 0; font-size: 12px; color: #555;">Trần Hùng Mạnh • Hạn 31/12/2026[cite: 11]</p>
+                <p style="margin: 4px 0 0 0; font-size: 12px; color: #475569;">Trần Hùng Mạnh • Hạn 31/12/2026[cite: 11]</p>
             </div>
             """,
             unsafe_allow_html=True,
@@ -251,8 +302,8 @@ def render_dashboard():
     c_act_head1, c_act_head2 = st.columns([4, 1])
     with c_act_head1:
         st.markdown(
-            "<span style='font-size: 11px; color: gray; letter-spacing:"
-            " 1px;'>DẤU VẾT VẬN HÀNH</span>",
+            "<span style='font-size: 11px; color: #64748b; letter-spacing:"
+            " 1px; font-weight: bold;'>DẤU VẾT VẬN HÀNH</span>",
             unsafe_allow_html=True,
         )
         st.markdown(
@@ -262,38 +313,38 @@ def render_dashboard():
     with c_act_head2:
         st.markdown(
             "<p style='text-align: right; font-size: 12px; color:"
-            " gray;'>Cập nhật tự động[cite: 11]</p>",
+            " #64748b;'>Cập nhật tự động[cite: 11]</p>",
             unsafe_allow_html=True,
         )
 
     st.markdown(
         """
-        <div style="background-color: white; padding: 15px; border-radius: 8px; border: 1px solid #e0e0e0;">
+        <div style="background-color: white; padding: 15px; border-radius: 8px; border: 1px solid #e2e8f0;">
             <div style="display: flex; justify-content: space-between; margin-bottom: 10px;">
                 <div>
-                    <p style="margin: 0; font-size: 13px; font-weight: bold;">🟢 Đã lưu trữ hồ sơ BS. Nguyễn Minh Anh.</p>
-                    <p style="margin: 0; font-size: 11px; color: gray;">Phòng Nhân sự • 10:07 23-09[cite: 11]</p>
+                    <p style="margin: 0; font-size: 13px; font-weight: bold; color: #1e293b;">🟢 Đã lưu trữ hồ sơ BS. Nguyễn Minh Anh.</p>
+                    <p style="margin: 0; font-size: 11px; color: #64748b;">Phòng Nhân sự • 10:07 23-09[cite: 11]</p>
                 </div>
                 <div>
-                    <p style="margin: 0; font-size: 13px; font-weight: bold;">🟢 Đã lưu trữ hồ sơ BS. Vũ Hoàng Nam.</p>
-                    <p style="margin: 0; font-size: 11px; color: gray;">Phòng Nhân sự • 10:07 23-09[cite: 11]</p>
+                    <p style="margin: 0; font-size: 13px; font-weight: bold; color: #1e293b;">🟢 Đã lưu trữ hồ sơ BS. Vũ Hoàng Nam.</p>
+                    <p style="margin: 0; font-size: 11px; color: #64748b;">Phòng Nhân sự • 10:07 23-09[cite: 11]</p>
                 </div>
             </div>
-            <hr style="margin: 8px 0; border: none; border-top: 1px solid #eee;">
+            <hr style="margin: 8px 0; border: none; border-top: 1px solid #f1f5f9;">
             <div style="display: flex; justify-content: space-between; margin-bottom: 10px;">
                 <div>
-                    <p style="margin: 0; font-size: 13px; font-weight: bold;">🔵 Hệ thống tạo cảnh báo gia hạn chứng chỉ cho BS. Vũ Hoàng Nam.</p>
-                    <p style="margin: 0; font-size: 11px; color: gray;">Hệ thống • 09:34 23-09[cite: 11]</p>
+                    <p style="margin: 0; font-size: 13px; font-weight: bold; color: #1e293b;">🔵 Hệ thống tạo cảnh báo gia hạn chứng chỉ cho BS. Vũ Hoàng Nam.</p>
+                    <p style="margin: 0; font-size: 11px; color: #64748b;">Hệ thống • 09:34 23-09[cite: 11]</p>
                 </div>
                 <div>
-                    <p style="margin: 0; font-size: 13px; font-weight: bold;">🔵 CN. Trần Thu Hà đã cập nhật thông tin đào tạo.</p>
-                    <p style="margin: 0; font-size: 11px; color: gray;">Phòng Nhân sự • 09:34 23-09[cite: 11]</p>
+                    <p style="margin: 0; font-size: 13px; font-weight: bold; color: #1e293b;">🔵 CN. Trần Thu Hà đã cập nhật thông tin đào tạo.</p>
+                    <p style="margin: 0; font-size: 11px; color: #64748b;">Phòng Nhân sự • 09:34 23-09[cite: 11]</p>
                 </div>
             </div>
-            <hr style="margin: 8px 0; border: none; border-top: 1px solid #eee;">
+            <hr style="margin: 8px 0; border: none; border-top: 1px solid #f1f5f9;">
             <div>
-                <p style="margin: 0; font-size: 13px; font-weight: bold;">🔵 Báo cáo biến động nhân sự tháng 09/2026 đã được xuất.</p>
-                <p style="margin: 0; font-size: 11px; color: gray;">CN. Trần Thu Hà • 09:34 23-09[cite: 11]</p>
+                <p style="margin: 0; font-size: 13px; font-weight: bold; color: #1e293b;">🔵 Báo cáo biến động nhân sự tháng 09/2026 đã được xuất.</p>
+                <p style="margin: 0; font-size: 11px; color: #64748b;">CN. Trần Thu Hà • 09:34 23-09[cite: 11]</p>
             </div>
         </div>
         """,
@@ -302,47 +353,114 @@ def render_dashboard():
 
 
 # ---------------------------------------------------------
-# 3. THANH MENU BÊN TRÁI (SIDEBAR)
+# 3. THANH MENU BÊN TRÁI (SIDEBAR) ĐẦY ĐỦ CÁC NHÓM
 # ---------------------------------------------------------
-st.sidebar.title("MENU QUẢN TRỊ CÁN BỘ")
-st.sidebar.markdown("---")
-menu_choice = st.sidebar.radio(
-    "Chọn chức năng:",
-    [
-        "1. 📊 Dashboard Tổng quan",
-        "2. 📁 Danh mục Hệ thống",
-        "3. 🏢 Quản lý Cơ cấu Tổ chức",
-        "4. 👨‍⚕️ Quản lý Hồ sơ Cán bộ",
-        "5. 📑 Quản lý Tuyển dụng",
-        "6. 📝 Quản lý Hợp đồng Lao động",
-        "7. 🔄 Điều động - Điều chuyển",
-        "8. ⏰ Chấm công - Ca trực - Phân lịch",
-        "9. 🏖️ Quản lý Nghỉ phép & Miễn trực",
-        "10. 💰 Quản lý Tiền lương & Phụ cấp",
-        "11. 🩺 Quản lý Chứng chỉ Hành nghề Y",
-        "12. 🎓 Quản lý Đào tạo & Bồi dưỡng CML",
-        "13. 🏆 Đánh giá & Đánh giá An toàn Bệnh viện",
-        "14. 🎖️ Thi đua - Khen thưởng & Kỷ luật",
-        "15. 🏥 Quản lý Sức khỏe & Bảo hiểm",
-        "16. 📋 Quản lý Tài sản - Quy trình",
-        "17. 📈 Báo cáo - Thống kê - CSDL Y tế",
-        "18. ⚙️ Quản lý Hệ thống & Phân quyền",
-    ],
-)
+with st.sidebar:
+    st.markdown(
+        """
+        <div style="display: flex; align-items: center; gap: 10px; margin-bottom: 20px;">
+            <div style="background-color: #2563eb; color: white; width: 36px; height: 36px; border-radius: 50%; display: flex; align-items: center; justify-content: center; font-weight: bold; font-size: 16px;">BV</div>
+            <div>
+                <div style="font-weight: bold; font-size: 14px; color: white;">BỆNH VIỆN BƯU ĐIỆN</div>
+                <div style="font-size: 11px; color: #94a3b8;">VNPT - HRM</div>
+            </div>
+        </div>
+    """,
+        unsafe_allow_html=True,
+    )
+
+    st.markdown(
+        "<div class='sidebar-section-title'>Điều hành</div>",
+        unsafe_allow_html=True,
+    )
+    menu_choice = st.radio(
+        "Điều hành",
+        ["🏠 Tổng quan", "👥 Hồ sơ nhân sự", "🏢 Sơ đồ tổ chức"],
+        label_visibility="collapsed",
+    )
+
+    st.markdown(
+        "<div class='sidebar-section-title'>Nghiệp vụ nhân sự</div>",
+        unsafe_allow_html=True,
+    )
+    menu_nv = st.selectbox(
+        "Nghiệp vụ nhân sự",
+        [
+            "Chọn nghiệp vụ...",
+            "Tuyển dụng & tiếp nhận",
+            "Hợp đồng & quyết định",
+            "Lương & ngạch bậc",
+            "Đào tạo & chứng chỉ",
+            "Nghỉ phép & chấm công",
+            "Đánh giá & khen thưởng",
+            "Sức khỏe nghề nghiệp",
+        ],
+        label_visibility="collapsed",
+    )
+
+    st.markdown(
+        "<div class='sidebar-section-title'>Dịch vụ nội bộ</div>",
+        unsafe_allow_html=True,
+    )
+    menu_dv = st.selectbox(
+        "Dịch vụ nội bộ",
+        ["Chọn dịch vụ...", "Cổng nhân viên (ESS)", "Quản lý đơn vị (MSS)"],
+        label_visibility="collapsed",
+    )
+
+    st.markdown(
+        "<div class='sidebar-section-title'>Quản trị & Báo cáo</div>",
+        unsafe_allow_html=True,
+    )
+    menu_qt = st.selectbox(
+        "Quản trị & Báo cáo",
+        [
+            "Chọn chức năng...",
+            "Cảnh báo hạn",
+            "Chính sách & phúc lợi",
+            "Báo cáo quản trị",
+            "Phê duyệt & luân chuyển",
+            "Kho văn bản nhân sự",
+            "Phân quyền & tài khoản",
+            "Thiết lập hệ thống",
+        ],
+        label_visibility="collapsed",
+    )
+
+    st.markdown("---")
+    st.markdown(
+        """
+        <div style="background-color: #1e293b; padding: 10px; border-radius: 6px; font-size: 11px; color: #94a3b8;">
+            <div style="color: #38bdf8; font-weight: bold; margin-bottom: 4px;">TRẠNG THÁI HỆ THỐNG</div>
+            <div>842 hồ sơ chính thức đã đồng bộ từ danh sách ngày 25/08/2026.</div>
+            <hr style="border: none; border-top: 1px solid #334155; margin: 6px 0;">
+            <div style="font-weight: bold; color: white;">Phòng Tổ chức</div>
+            <div>Quản trị viên</div>
+        </div>
+    """,
+        unsafe_allow_html=True,
+    )
 
 # ---------------------------------------------------------
-# 4. ĐIỀU HƯỚNG MÀN HÌNH THEO MENU AN TOÀN
+# 4. ĐIỀU HƯỚNG TRANG DỰA TRÊN MENU LỰA CHỌN
 # ---------------------------------------------------------
-if "Dashboard Tổng quan" in menu_choice:
+if "Tổng quan" in menu_choice:
     render_dashboard()
-elif "Danh mục Hệ thống" in menu_choice:
-    render_category_management()
-elif "Quản lý Cơ cấu Tổ chức" in menu_choice:
-    render_organization_management()
-elif "Quản lý Hồ sơ Cán bộ" in menu_choice:
+elif "Hồ sơ nhân sự" in menu_choice:
     render_employee_management()
-elif "Chấm công" in menu_choice:
-    render_timekeeping_management()
+elif "Sơ đồ tổ chức" in menu_choice:
+    render_organization_management()
+elif menu_nv != "Chọn nghiệp vụ...":
+    if "chấm công" in menu_nv.lower():
+        render_timekeeping_management()
+    else:
+        st.title(f"Phân hệ: {menu_nv}")
+        st.info("Chức năng đang được vận hành và đồng bộ dữ liệu.")
+elif menu_qt != "Chọn chức năng...":
+    if "danh mục" in menu_qt.lower() or "thiết lập" in menu_qt.lower():
+        render_category_management()
+    else:
+        st.title(f"Quản trị: {menu_qt}")
+        st.info("Chức năng đang được vận hành và đồng bộ dữ liệu.")
 else:
-    st.title(menu_choice)
-    st.info("Chức năng đang được nâng cấp và phát triển.")
+    render_dashboard()
