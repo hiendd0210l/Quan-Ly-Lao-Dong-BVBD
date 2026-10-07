@@ -44,17 +44,7 @@ def extract_month_from_value(val):
     if not s or s.lower() in ["nan", "nat", "none", ""]:
         return None
 
-    # Nếu là chuỗi số ngày Excel
-    if s.replace(".", "", 1).isdigit():
-        try:
-            num = float(s)
-            if num > 59:
-                dt = pd.to_datetime("1899-12-30") + pd.Timedelta(days=num)
-                return dt.month
-        except Exception:
-            pass
-
-    # Quét các dấu phân cách ngày tháng
+    # Xử lý chuỗi ngày tháng chứa số hoặc định dạng
     for sep in ["/", "-", "."]:
         if sep in s:
             parts = s.split(sep)
@@ -214,7 +204,7 @@ def render_dashboard():
     )
 
     current_month = datetime.now().month
-    col_s1, col_s2, col_s3, col_s4 = st.columns([2, 2, 2, 6])
+    col_s1, col_s2, col_s3, col_s4 = st.columns([2, 3, 2, 5])
 
     with col_s1:
         selected_birth_month = st.selectbox(
@@ -226,32 +216,32 @@ def render_dashboard():
 
     birthday_count = 0
     df_birthday_filtered = pd.DataFrame()
-    dob_col = None
 
     if not df_emp.empty:
-        # Cho phép người dùng chọn trực tiếp cột Ngày sinh nếu hệ thống tự động quét không đúng
+        # Lấy danh sách toàn bộ cột trong DataFrame
+        all_columns = list(df_emp.columns)
+
         with col_s2:
-            cols_list = list(df_emp.columns)
-            # Tự động gợi ý cột chứa từ khóa ngày sinh
-            default_idx = 0
-            for idx, c in enumerate(cols_list):
+            # Chọn cột ngày sinh trực quan
+            default_index = 0
+            for idx, col_name in enumerate(all_columns):
+                c_low = str(col_name).lower()
                 if any(
-                    k in str(c).lower()
-                    for k in ["ngày sinh", "năm sinh", "dob", "ngay_sinh", "ns"]
+                    k in c_low
+                    for k in ["ngày sinh", "năm sinh", "dob", "ngay", "ns"]
                 ):
-                    default_idx = idx
+                    default_index = idx
                     break
 
-            chosen_dob_col = st.selectbox(
-                "Cột Ngày sinh trong Excel:",
-                cols_list,
-                index=default_idx,
-                key="sb_dob_column",
+            dob_column = st.selectbox(
+                "Chọn cột Ngày sinh:",
+                all_columns,
+                index=default_index,
+                key="select_dob_col",
             )
-            dob_col = chosen_dob_col
 
-        if dob_col:
-            df_emp["_thang_sinh"] = df_emp[dob_col].apply(
+        if dob_column:
+            df_emp["_thang_sinh"] = df_emp[dob_column].apply(
                 extract_month_from_value
             )
             df_birthday_filtered = df_emp[
@@ -262,7 +252,7 @@ def render_dashboard():
     with col_s3:
         st.write("")
         st.metric(
-            label=f"Số lượng SN Tháng {selected_birth_month}",
+            label=f"Sinh nhật Tháng {selected_birth_month}",
             value=f"{birthday_count} cán bộ",
         )
 
@@ -323,8 +313,8 @@ def render_dashboard():
                     "Đơn vị công tác": str(r.get(unit_col) or "").strip()
                     if unit_col
                     else "",
-                    "Ngày sinh": str(r.get(dob_col) or "").strip()
-                    if dob_col
+                    "Ngày sinh": str(r.get(dob_column) or "").strip()
+                    if dob_column
                     else "",
                     "_is_quan_ly": is_management_position(cv),
                 })
@@ -344,9 +334,9 @@ def render_dashboard():
             st.dataframe(df_out, use_container_width=True, hide_index=True)
         else:
             st.info(
-                f"Không có cán bộ nào có ngày sinh trong tháng"
-                f" {selected_birth_month} (hoặc định dạng cột Ngày sinh cần được"
-                " chọn chính xác ở ô phía trên)."
+                f"Không tìm thấy cán bộ nào có sinh nhật trong tháng"
+                f" {selected_birth_month} dựa trên cột Ngày sinh đã chọn. Vui"
+                " lòng kiểm tra lại tên cột ở ô phía trên."
             )
 
     st.markdown("---")
