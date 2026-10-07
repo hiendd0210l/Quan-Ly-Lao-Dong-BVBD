@@ -31,7 +31,7 @@ st.markdown(
 
 
 # ---------------------------------------------------------
-# 2. HÀM XỬ LÝ NGÀY SINH VÀ QUẢN LÝ THÔNG MINH
+# 2. HÀM XỬ LÝ NGÀY SINH TỪ HỒ SƠ CÁN BỘ
 # ---------------------------------------------------------
 def extract_month_from_value(val):
     if pd.isna(val) or val is None:
@@ -44,17 +44,12 @@ def extract_month_from_value(val):
     if not s or s.lower() in ["nan", "nat", "none", ""]:
         return None
 
-    # Xử lý chuỗi ngày tháng chứa số hoặc định dạng
+    # Quét định dạng DD/MM/YYYY hoặc YYYY-MM-DD
     for sep in ["/", "-", "."]:
         if sep in s:
             parts = s.split(sep)
             if len(parts) >= 3:
-                for p in parts:
-                    if p.isdigit():
-                        val_int = int(p)
-                        if 1 <= val_int <= 12 and len(p) <= 2:
-                            return val_int
-            elif len(parts) == 2:
+                # Kiểm tra phần tháng (thường là phần tử thứ 2 nếu DD/MM/YYYY)
                 for p in parts:
                     if p.isdigit():
                         val_int = int(p)
@@ -88,7 +83,7 @@ def is_management_position(pos_str):
 
 
 # ---------------------------------------------------------
-# 3. HÀM HIỂN THỊ DASHBOARD
+# 3. HÀM HIỂN THỊ DASHBOARD TỔNG QUAN
 # ---------------------------------------------------------
 def render_dashboard():
     df_emp = pd.DataFrame()
@@ -195,16 +190,16 @@ def render_dashboard():
     st.write("")
 
     # =========================================================
-    # 2. THÔNG BÁO & DANH SÁCH SINH NHẬT NHÂN SỰ THEO THÁNG
+    # 2. THỐNG KÊ & DANH SÁCH SINH NHẬT TỪ BẢNG HỒ SƠ CÁN BỘ
     # =========================================================
     st.markdown("---")
     st.markdown(
-        "🎂 **THỐNG KÊ NHÂN SỰ CÓ SINH NHẬT TRONG THÁNG**",
+        "🎂 **THỐNG KÊ NHÂN SỰ CÓ SINH NHẬT TRONG THÁNG (KẾT NỐI HỒ SƠ)**",
         unsafe_allow_html=True,
     )
 
     current_month = datetime.now().month
-    col_s1, col_s2, col_s3, col_s4 = st.columns([2, 3, 2, 5])
+    col_s1, col_s2, col_s3 = st.columns([2, 3, 6])
 
     with col_s1:
         selected_birth_month = st.selectbox(
@@ -216,32 +211,34 @@ def render_dashboard():
 
     birthday_count = 0
     df_birthday_filtered = pd.DataFrame()
+    dob_col = None
 
     if not df_emp.empty:
-        # Lấy danh sách toàn bộ cột trong DataFrame
-        all_columns = list(df_emp.columns)
+        # Tự động quét chính xác cột Ngày sinh từ bảng Quản lý hồ sơ cán bộ
+        for col in df_emp.columns:
+            c_low = str(col).lower()
+            if any(
+                k in c_low
+                for k in ["ngày sinh", "năm sinh", "dob", "ngay_sinh", "ns"]
+            ):
+                dob_col = col
+                break
 
-        with col_s2:
-            # Chọn cột ngày sinh trực quan
-            default_index = 0
-            for idx, col_name in enumerate(all_columns):
-                c_low = str(col_name).lower()
-                if any(
-                    k in c_low
-                    for k in ["ngày sinh", "năm sinh", "dob", "ngay", "ns"]
-                ):
-                    default_index = idx
+        # Nếu không tìm thấy qua từ khóa, tự động quét cột có giá trị khớp định dạng ngày tháng
+        if not dob_col:
+            for col in df_emp.columns:
+                sample_vals = df_emp[col].dropna().head(5)
+                matched = sum(
+                    1
+                    for v in sample_vals
+                    if extract_month_from_value(v) is not None
+                )
+                if matched >= 2:
+                    dob_col = col
                     break
 
-            dob_column = st.selectbox(
-                "Chọn cột Ngày sinh:",
-                all_columns,
-                index=default_index,
-                key="select_dob_col",
-            )
-
-        if dob_column:
-            df_emp["_thang_sinh"] = df_emp[dob_column].apply(
+        if dob_col:
+            df_emp["_thang_sinh"] = df_emp[dob_col].apply(
                 extract_month_from_value
             )
             df_birthday_filtered = df_emp[
@@ -249,14 +246,13 @@ def render_dashboard():
             ].copy()
             birthday_count = len(df_birthday_filtered)
 
-    with col_s3:
-        st.write("")
+    with col_s2:
         st.metric(
-            label=f"Sinh nhật Tháng {selected_birth_month}",
+            label=f"Số lượng nhân sự sinh nhật Tháng {selected_birth_month}",
             value=f"{birthday_count} cán bộ",
         )
 
-    with col_s4:
+    with col_s3:
         st.write("")
         show_birthday_list = st.checkbox(
             f"📋 Xem danh sách chi tiết cán bộ sinh nhật tháng"
@@ -313,13 +309,14 @@ def render_dashboard():
                     "Đơn vị công tác": str(r.get(unit_col) or "").strip()
                     if unit_col
                     else "",
-                    "Ngày sinh": str(r.get(dob_column) or "").strip()
-                    if dob_column
+                    "Ngày sinh": str(r.get(dob_col) or "").strip()
+                    if dob_col
                     else "",
                     "_is_quan_ly": is_management_position(cv),
                 })
 
             df_out = pd.DataFrame(list_data)
+            # Sắp xếp: Ưu tiên cán bộ quản lý lên đầu bảng
             df_out = df_out.sort_values(
                 by="_is_quan_ly", ascending=False
             ).reset_index(drop=True)
@@ -334,14 +331,13 @@ def render_dashboard():
             st.dataframe(df_out, use_container_width=True, hide_index=True)
         else:
             st.info(
-                f"Không tìm thấy cán bộ nào có sinh nhật trong tháng"
-                f" {selected_birth_month} dựa trên cột Ngày sinh đã chọn. Vui"
-                " lòng kiểm tra lại tên cột ở ô phía trên."
+                f"Không có cán bộ nào có ngày sinh trong tháng"
+                f" {selected_birth_month}."
             )
 
     st.markdown("---")
 
-    # --- 3. BIỂU ĐỒ KHOA/PHÒNG & CẢNH BÁO CHƯA ĐỌC ---
+    # --- 3. BIỂU ĐỒ KHOA/PHÒNG & CẢNH BÁO ---
     col_dept, col_alert = st.columns([7, 5])
 
     with col_dept:
