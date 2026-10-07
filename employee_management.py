@@ -42,7 +42,8 @@ def render_employee_management():
         df_template = pd.DataFrame(template_data)
 
         output = io.BytesIO()
-        with pd.ExcelWriter(output, engine="xlsxwriter") as writer:
+        # Sử dụng engine openpyxl (hoặc mặc định) để tránh lỗi thiếu thư viện xlsxwriter
+        with pd.ExcelWriter(output, engine="openpyxl") as writer:
             df_template.to_excel(writer, index=False, sheet_name="Mau_Ho_So")
         excel_data = output.getvalue()
 
