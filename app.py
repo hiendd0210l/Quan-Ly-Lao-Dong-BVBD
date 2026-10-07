@@ -17,10 +17,43 @@ st.set_page_config(
 
 
 # ---------------------------------------------------------
-# 2. HÀM HIỂN THỊ DASHBOARD TỔNG QUAN (DỮ LIỆU THẬT)
+# 2. HÀM XỬ LÝ VÀ GOM NHÓM TRÌNH ĐỘ CHUYÊN MÔN THÔNG MINH
+# ---------------------------------------------------------
+def extract_education_level(val):
+    s = str(val).lower()
+    if any(
+        k in s
+        for k in [
+            "tiến sĩ",
+            "ts",
+            "ck2",
+            "chuyên khoa ii",
+            "chuyên khoa 2",
+            "phó giáo sư",
+            "gs",
+        ]
+    ):
+        return "Tiến sĩ / CKII / PGS"
+    elif any(
+        k in s for k in ["thạc sĩ", "thS", "cki", "chuyên khoa i", "chuyên khoa 1"]
+    ):
+        return "Thạc sĩ / CKI"
+    elif any(
+        k in s for k in ["đại học", "bsi", "bác sĩ", "cử nhân", "đh"]
+    ):  # Nếu có chứa Đại học hoặc Bác sĩ (trừ thạc sĩ/tiến sĩ ở trên)
+        return "Đại học / Bác sĩ"
+    elif any(k in s for k in ["cao đẳng", "cđ"]):
+        return "Cao đẳng"
+    elif any(k in s for k in ["trung cấp", "tc", "sơ cấp"]):
+        return "Trung cấp / Sơ cấp"
+    else:
+        return "Khác / Chưa xác định"
+
+
+# ---------------------------------------------------------
+# 3. HÀM HIỂN THỊ DASHBOARD TỔNG QUAN
 # ---------------------------------------------------------
 def render_dashboard():
-    # Lấy dữ liệu thực tế từ Session State (Menu Quản lý Hồ sơ Cán bộ)
     df_emp = pd.DataFrame()
     if "employees_profile" in st.session_state:
         df_ses = st.session_state["employees_profile"]
@@ -57,220 +90,102 @@ def render_dashboard():
         )
         return
 
-    # --- A. NHẬN DIỆN CỘT CHỨC DANH / CHỨC VỤ ---
-    pos_col = None
-    for col in df_emp.columns:
-        col_lower = str(col).lower()
-        if any(
-            k in col_lower for k in ["chức danh", "chức vụ", "vị trí", "chd", "cv"]
-        ):
-            sample_val = (
-                str(df_emp[col].dropna().iloc[0])
-                if not df_emp[col].dropna().empty
-                else ""
-            )
-            if not sample_val.replace(".", "", 1).isdigit():
-                pos_col = col
-                break
-
-    if not pos_col:
-        for col in df_emp.columns:
-            if df_emp[col].dtype == "object":
-                sample_str = str(df_emp[col].iloc[0]).lower()
-                if any(
-                    w in sample_str
-                    for w in [
-                        "bác sĩ",
-                        "điều dưỡng",
-                        "kỹ thuật",
-                        "dược",
-                        "trưởng",
-                        "phó",
-                        "nhân viên",
-                        "chuyên viên",
-                    ]
-                ):
-                    pos_col = col
-                    break
-
-    if pos_col:
-        counts = df_emp[pos_col].astype(str).str.strip().value_counts()
-        df_chuc_danh = pd.DataFrame({
-            "Chức danh công tác": counts.index,
-            "Số lượng": counts.values,
-        })
-        df_chuc_danh["Tỷ lệ (%)"] = (
-            df_chuc_danh["Số lượng"] / total_emp
-        ) * 100
-    else:
-        df_chuc_danh = pd.DataFrame({
-            "Chức danh công tác": ["Chưa xác định"],
-            "Số lượng": [total_emp],
-            "Tỷ lệ (%)": [100.0],
-        })
-
-    # --- B. NHẬN DIỆN CỘT TRÌNH ĐỘ ĐÀO TẠO ---
-    edu_col = None
+    # --- TỰ ĐỘNG TÌM CỘT CHỨA THÔNG TIN TRÌNH ĐỘ / CHỨC DANH ĐỂ BÓC TÁCH ---
+    target_col = None
     for col in df_emp.columns:
         col_lower = str(col).lower()
         if any(
             k in col_lower
-            for k in ["trình độ", "đào tạo", "chuyên môn", "bằng cấp", "hoc_vi"]
+            for k in [
+                "chức danh",
+                "trình độ",
+                "chuyên môn",
+                "bằng cấp",
+                "vị trí",
+                "chức vụ",
+            ]
         ):
-            edu_col = col
+            target_col = col
             break
 
-    if not edu_col:
-        for col in df_emp.columns:
-            if df_emp[col].dtype == "object":
-                sample_str = str(df_emp[col].iloc[0]).lower()
-                if any(
-                    w in sample_str
-                    for w in [
-                        "đại học",
-                        "thạc sĩ",
-                        "tiến sĩ",
-                        "cao đẳng",
-                        "trung cấp",
-                        "bsi",
-                        "cử nhân",
-                    ]
-                ):
-                    edu_col = col
-                    break
+    if not target_col and len(df_emp.columns) > 2:
+        target_col = df_emp.columns[2]  # Lấy cột mặc định nếu không tìm thấy
 
-    if edu_col:
-        edu_counts = df_emp[edu_col].astype(str).str.strip().value_counts()
+    if target_col:
+        # Áp dụng hàm bóc tách và gom nhóm thông minh theo Trình độ chuyên môn
+        edu_series = df_emp[target_col].apply(extract_education_level)
+        counts = edu_series.value_counts()
+
+        # Sắp xếp thứ tự ưu tiên học hàm/học vị từ cao xuống thấp
+        order_priority = [
+            "Tiến sĩ / CKII / PGS",
+            "Thạc sĩ / CKI",
+            "Đại học / Bác sĩ",
+            "Cao đẳng",
+            "Trung cấp / Sơ cấp",
+            "Khác / Chưa xác định",
+        ]
+        counts = counts.reindex(
+            [o for o in order_priority if o in counts.index]
+        )
+
         df_trinh_do = pd.DataFrame({
-            "Trình độ đào tạo": edu_counts.index,
-            "Số lượng": edu_counts.values,
+            "Trình độ chuyên môn": counts.index,
+            "Số lượng": counts.values,
         })
         df_trinh_do["Tỷ lệ (%)"] = (
             df_trinh_do["Số lượng"] / total_emp
         ) * 100
     else:
-        # Tạo bảng mẫu nếu file Excel chưa có cột trình độ rõ ràng
         df_trinh_do = pd.DataFrame({
-            "Trình độ đào tạo": [
-                "Tiến sĩ",
-                "Thạc sĩ",
-                "Đại học",
-                "Cao đẳng",
-                "Trung cấp / Khác",
-            ],
-            "Số lượng": [
-                round(total_emp * 0.05),
-                round(total_emp * 0.15),
-                round(total_emp * 0.55),
-                round(total_emp * 0.15),
-                round(total_emp * 0.10),
-            ],
-            "Tỷ lệ (%)": [5.0, 15.0, 55.0, 15.0, 10.0],
+            "Trình độ chuyên môn": ["Chưa xác định"],
+            "Số lượng": [total_emp],
+            "Tỷ lệ (%)": [100.0],
         })
 
     # =========================================================
-    # PHẦN 1: THỐNG KÊ THEO CHỨC DANH CÔNG TÁC
+    # HIỂN THỊ BIỂU ĐỒ VÀ BẢNG THỐNG KÊ THEO TRÌNH ĐỘ CHUYÊN MÔN
     # =========================================================
-    st.subheader(
-        "📊 THỐNG KÊ CƠ CẤU LAO ĐỘNG THEO CHỨC DANH TOÀN BỆNH VIỆN"
-    )
+    st.subheader("🎓 THỐNG KÊ CƠ CẤU NHÂN SỰ THEO TRÌNH ĐỘ CHUYÊN MÔN")
 
-    col_chart1, col_table1 = st.columns([3, 2])
-    with col_chart1:
-        fig_bar1 = px.bar(
-            df_chuc_danh,
-            x="Chức danh công tác",
+    col_chart, col_table = st.columns([3, 2])
+    with col_chart:
+        fig_bar = px.bar(
+            df_trinh_do,
+            x="Trình độ chuyên môn",
             y="Số lượng",
             text="Số lượng",
-            color="Chức danh công tác",
+            color="Trình độ chuyên môn",
             labels={
                 "Số lượng": "Số lượng (người)",
-                "Chức danh công tác": "Chức danh công tác",
+                "Trình độ chuyên môn": "Trình độ chuyên môn",
             },
         )
-        fig_bar1.update_traces(
+        fig_bar.update_traces(
             textposition="outside",
             texttemplate="%{text} người",
             cliponaxis=False,
             marker=dict(line=dict(width=2, color="rgba(0,0,0,0.3)")),
         )
-        fig_bar1.update_layout(
-            title="<b>Tỷ lệ phân bổ Nhân sự theo Chức danh (Góc nhìn 3D)</b>",
-            xaxis_title="Chức danh công tác",
+        fig_bar.update_layout(
+            title="<b>Phân bố Nhân sự theo Trình độ Chuyên môn (Góc nhìn 3D)</b>",
+            xaxis_title="Trình độ chuyên môn",
             yaxis_title="Số lượng (Người)",
             showlegend=False,
             height=380,
             scene_camera=dict(eye=dict(x=1.5, y=1.5, z=1.2)),
             margin=dict(l=20, r=20, t=40, b=20),
         )
-        st.plotly_chart(fig_bar1, use_container_width=True)
+        st.plotly_chart(fig_bar, use_container_width=True)
 
-    with col_table1:
-        st.markdown("##### 📋 Phân tích Chi tiết Từng Chức danh")
-        st.dataframe(
-            df_chuc_danh,
-            use_container_width=True,
-            hide_index=True,
-            column_config={
-                "Chức danh công tác": st.column_config.Column(
-                    "Chức danh", width="medium"
-                ),
-                "Số lượng": st.column_config.NumberColumn(
-                    "Số lượng (Người)", format="%d"
-                ),
-                "Tỷ lệ (%)": st.column_config.NumberColumn(
-                    "Tỷ lệ", format="%.2f%%"
-                ),
-            },
-        )
-        st.write("")
-        st.metric("Tổng số Cán bộ - Nhân viên thực tế", f"{total_emp:,} người")
-
-    st.markdown("---")
-
-    # =========================================================
-    # PHẦN 2: THỐNG KÊ THEO TRÌNH ĐỘ ĐÀO TẠO
-    # =========================================================
-    st.subheader("🎓 THỐNG KÊ CƠ CẤU NHÂN SỰ THEO TRÌNH ĐỘ ĐÀO TẠO")
-
-    col_chart2, col_table2 = st.columns([3, 2])
-    with col_chart2:
-        fig_bar2 = px.bar(
-            df_trinh_do,
-            x="Trình độ đào tạo",
-            y="Số lượng",
-            text="Số lượng",
-            color="Trình độ đào tạo",
-            labels={
-                "Số lượng": "Số lượng (người)",
-                "Trình độ đào tạo": "Trình độ đào tạo",
-            },
-        )
-        fig_bar2.update_traces(
-            textposition="outside",
-            texttemplate="%{text} người",
-            cliponaxis=False,
-            marker=dict(line=dict(width=2, color="rgba(0,0,0,0.3)")),
-        )
-        fig_bar2.update_layout(
-            title="<b>Phân bố Trình độ Chuyên môn / Đào tạo (Góc nhìn 3D)</b>",
-            xaxis_title="Trình độ đào tạo",
-            yaxis_title="Số lượng (Người)",
-            showlegend=False,
-            height=380,
-            scene_camera=dict(eye=dict(x=1.5, y=1.5, z=1.2)),
-            margin=dict(l=20, r=20, t=40, b=20),
-        )
-        st.plotly_chart(fig_bar2, use_container_width=True)
-
-    with col_table2:
-        st.markdown("##### 📋 Phân tích Chi tiết Trình độ Đào tạo")
+    with col_table:
+        st.markdown("##### 📋 Phân tích Chi tiết Theo Trình độ")
         st.dataframe(
             df_trinh_do,
             use_container_width=True,
             hide_index=True,
             column_config={
-                "Trình độ đào tạo": st.column_config.Column(
+                "Trình độ chuyên môn": st.column_config.Column(
                     "Trình độ", width="medium"
                 ),
                 "Số lượng": st.column_config.NumberColumn(
@@ -282,11 +197,13 @@ def render_dashboard():
             },
         )
         st.write("")
-        st.metric("Tổng số lượng đánh giá", f"{total_emp:,} nhân sự")
+        st.metric(
+            "Tổng số Cán bộ - Nhân viên thực tế", f"{total_emp:,} người"
+        )
 
     st.markdown("---")
 
-    # --- C. THỐNG KÊ TỔNG QUAN HỒ SƠ THỰC TẾ ---
+    # --- THỐNG KÊ TỔNG QUAN HỆ THỐNG ---
     st.subheader("⚠️ THỐNG KÊ HỆ THỐNG QUẢN TRỊ NHÂN SỰ")
 
     c1, c2, c3, c4, c5 = st.columns(5)
@@ -321,7 +238,7 @@ def render_dashboard():
 
 
 # ---------------------------------------------------------
-# 3. THANH MENU BÊN TRÁI (SIDEBAR)
+# 4. THANH MENU BÊN TRÁI (SIDEBAR)
 # ---------------------------------------------------------
 st.sidebar.title("MENU QUẢN TRỊ CÁN BỘ")
 st.sidebar.markdown("---")
@@ -350,7 +267,7 @@ menu_choice = st.sidebar.radio(
 )
 
 # ---------------------------------------------------------
-# 4. ĐIỀU HƯỚNG MÀN HÌNH THEO MENU AN TOÀN
+# 5. ĐIỀU HƯỚNG MÀN HÌNH THEO MENU AN TOÀN
 # ---------------------------------------------------------
 if "Dashboard Tổng quan" in menu_choice:
     render_dashboard()
