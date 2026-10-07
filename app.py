@@ -36,46 +36,41 @@ st.markdown(
 def extract_month_from_value(val):
     if pd.isna(val) or val is None:
         return None
-    
-    # Trường hợp nếu là kiểu datetime hoặc Timestamp của pandas
+
     if isinstance(val, (pd.Timestamp, datetime)):
         return val.month
-        
+
     s = str(val).strip()
     if not s or s.lower() in ["nan", "nat", "none", ""]:
         return None
-        
-    # Xử lý dạng số ngày tháng Excel (ví dụ: 25489)
+
+    # Nếu là chuỗi số ngày Excel
     if s.replace(".", "", 1).isdigit():
         try:
             num = float(s)
-            if num > 59:  # Trừ lùi lỗi ngày 1900 của Excel
+            if num > 59:
                 dt = pd.to_datetime("1899-12-30") + pd.Timedelta(days=num)
                 return dt.month
         except Exception:
             pass
 
-    # Xử lý chuỗi chứa định dạng ngày tháng (DD/MM/YYYY hoặc YYYY-MM-DD hoặc DD-MM-YYYY)
+    # Quét các dấu phân cách ngày tháng
     for sep in ["/", "-", "."]:
         if sep in s:
             parts = s.split(sep)
             if len(parts) >= 3:
-                # Kiểm tra xem phần nào là tháng (thường ở giữa hoặc ở đầu)
                 for p in parts:
                     if p.isdigit():
                         val_int = int(p)
                         if 1 <= val_int <= 12 and len(p) <= 2:
-                            # Nếu phần trước hoặc sau có năm 4 chữ số thì phần 1-12 chính là tháng
                             return val_int
             elif len(parts) == 2:
-                # Trường hợp chỉ có tháng và năm (MM/YYYY)
                 for p in parts:
                     if p.isdigit():
                         val_int = int(p)
                         if 1 <= val_int <= 12 and len(p) <= 2:
                             return val_int
 
-    # Thử parse trực tiếp bằng pandas to_datetime
     try:
         dt = pd.to_datetime(val, errors="coerce", dayfirst=True)
         if not pd.isna(dt):
@@ -219,7 +214,8 @@ def render_dashboard():
     )
 
     current_month = datetime.now().month
-    col_s1, col_s2, col_s3 = st.columns([2, 3, 6])
+    col_s1, col_s2, col_s3, col_s4 = st.columns([2, 2, 2, 6])
+
     with col_s1:
         selected_birth_month = st.selectbox(
             "Chọn tháng sinh nhật:",
@@ -230,38 +226,29 @@ def render_dashboard():
 
     birthday_count = 0
     df_birthday_filtered = pd.DataFrame()
+    dob_col = None
 
     if not df_emp.empty:
-        # Tự động quét thông minh tìm cột Ngày sinh
-        dob_col = None
-        for col in df_emp.columns:
-            c_low = str(col).lower()
-            if any(
-                k in c_low
-                for k in [
-                    "ngày sinh",
-                    "năm sinh",
-                    "dob",
-                    "ngay_sinh",
-                    "birthday",
-                    "ns",
-                ]
-            ):
-                dob_col = col
-                break
-
-        # Nếu không tìm thấy qua tên cột, quét tự động các cột chứa giá trị ngày tháng
-        if not dob_col:
-            for col in df_emp.columns:
-                sample_series = df_emp[col].dropna().head(5)
-                matched_cnt = sum(
-                    1
-                    for v in sample_series
-                    if extract_month_from_value(v) is not None
-                )
-                if matched_cnt >= 2:
-                    dob_col = col
+        # Cho phép người dùng chọn trực tiếp cột Ngày sinh nếu hệ thống tự động quét không đúng
+        with col_s2:
+            cols_list = list(df_emp.columns)
+            # Tự động gợi ý cột chứa từ khóa ngày sinh
+            default_idx = 0
+            for idx, c in enumerate(cols_list):
+                if any(
+                    k in str(c).lower()
+                    for k in ["ngày sinh", "năm sinh", "dob", "ngay_sinh", "ns"]
+                ):
+                    default_idx = idx
                     break
+
+            chosen_dob_col = st.selectbox(
+                "Cột Ngày sinh trong Excel:",
+                cols_list,
+                index=default_idx,
+                key="sb_dob_column",
+            )
+            dob_col = chosen_dob_col
 
         if dob_col:
             df_emp["_thang_sinh"] = df_emp[dob_col].apply(
@@ -272,13 +259,14 @@ def render_dashboard():
             ].copy()
             birthday_count = len(df_birthday_filtered)
 
-    with col_s2:
+    with col_s3:
+        st.write("")
         st.metric(
-            label=f"Số lượng nhân sự sinh nhật Tháng {selected_birth_month}",
+            label=f"Số lượng SN Tháng {selected_birth_month}",
             value=f"{birthday_count} cán bộ",
         )
 
-    with col_s3:
+    with col_s4:
         st.write("")
         show_birthday_list = st.checkbox(
             f"📋 Xem danh sách chi tiết cán bộ sinh nhật tháng"
@@ -357,7 +345,8 @@ def render_dashboard():
         else:
             st.info(
                 f"Không có cán bộ nào có ngày sinh trong tháng"
-                f" {selected_birth_month}."
+                f" {selected_birth_month} (hoặc định dạng cột Ngày sinh cần được"
+                " chọn chính xác ở ô phía trên)."
             )
 
     st.markdown("---")
