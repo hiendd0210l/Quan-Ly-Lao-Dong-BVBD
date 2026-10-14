@@ -1,324 +1,488 @@
 import io
+import json
+import os
 import pandas as pd
 import streamlit as st
 from supabase import create_client
 
-
 # ---------------------------------------------------------
-# 1. KẾT NỐI SUPABASE
+# KẾT NỐI SUPABASE
 # ---------------------------------------------------------
 @st.cache_resource
 def init_supabase():
     try:
-        url = st.secrets.get("SUPABASE_URL", "").strip()
-        key = (
-            st.secrets.get("SUPABASE_KEY")
-            or st.secrets.get("SUPABASE_SERVICE_KEY", "")
-        ).strip()
-        if not url or not key:
-            return None
-        if not url.startswith("https://"):
-            url = f"https://{url}"
+        url = st.secrets["SUPABASE_URL"]
+        key = st.secrets["SUPABASE_KEY"]
         return create_client(url, key)
-    except Exception:
+    except Exception as e:
+        st.error(f"⚠️️ Chưa cấu hình secrets SUPABASE_URL / SUPABASE_KEY: {e}")
         return None
 
 
-# ---------------------------------------------------------
-# 2. HÀM TRUY VẤN VÀ LỌC DANH MỤC TỪ CSDL
-# ---------------------------------------------------------
-def load_all_categories(supabase_client):
-    """Tải toàn bộ danh mục thực tế từ CSDL, lọc bỏ DUY NHẤT các Bảng chấm công theo tháng (ví dụ: tk_2026_09)"""
-    default_cats = {
-        "don_vi": "Đơn vị / Khoa / Phòng",
-        "chuc_vu": "Chức vụ / Chức danh",
-        "trinh_do": "Trình độ chuyên môn",
-        "ngach_luong": "Ngạch công chức",
-        "loai_hd": "Loại Hợp đồng Lao động",
-        "phu_cap": "Phụ cấp / Lương",
-        "tk_rules": "Quy ước Ký hiệu Chấm công",
-    }
+supabase = init_supabase()
 
-    if not supabase_client:
-        return default_cats
+# Danh sách danh mục mặc định ban đầu (Dùng khởi tạo lần đầu nếu DB trống)
+DEFAULT_CATEGORIES = {
+    "chuc_danh": {
+        "title": "📌 Chức danh & Mã ngạch",
+        "df": pd.DataFrame({
+            "Mã CĐ": ["BS", "BSCK1", "BSCK2", "ĐĐ", "KTV", "DS"],
+            "Tên Chức Danh": [
+                "Bác sĩ",
+                "Bác sĩ CKI",
+                "Bác sĩ CKII",
+                "Điều dưỡng",
+                "Kỹ thuật viên",
+                "Dược sĩ",
+            ],
+            "Mã Ngạch": [
+                "V.08.01.03",
+                "V.08.01.02",
+                "V.08.01.01",
+                "V.08.05.12",
+                "V.08.07.23",
+                "V.08.08.20",
+            ],
+            "Ghi chú": [
+                "Lâm sàng",
+                "Chuyên khoa 1",
+                "Chuyên khoa 2",
+                "Chăm sóc",
+                "Cận lâm sàng",
+                "Khoa Dược",
+            ],
+        }),
+    },
+    "trinh_do": {
+        "title": "🎓 Trình độ chuyên môn",
+        "df": pd.DataFrame({
+            "Mã TĐ": ["TS", "ThS", "BSCKII", "BSCKI", "CN", "CĐ", "TC"],
+            "Tên Trình độ": [
+                "Tiến sĩ",
+                "Thạc sĩ",
+                "Bác sĩ Chuyên khoa II",
+                "Bác sĩ Chuyên khoa I",
+                "Cử nhân / Đại học",
+                "Cao đẳng",
+                "Trung cấp",
+            ],
+            "Ghi chú": [
+                "Sau đại học",
+                "Sau đại học",
+                "Sau đại học",
+                "Sau đại học",
+                "Đại học",
+                "Cao đẳng",
+                "Trung cấp",
+            ],
+        }),
+    },
+    "loai_hop_dong": {
+        "title": "📝 Loại Hợp đồng Lao động",
+        "df": pd.DataFrame({
+            "Mã HĐ": ["KTH", "12T", "36T", "TV"],
+            "Tên Loại Hợp đồng": [
+                "HĐLĐ Không xác định thời hạn",
+                "HĐLĐ Xác định thời hạn 12 tháng",
+                "HĐLĐ Xác định thời hạn 36 tháng",
+                "Hợp đồng Thử việc",
+            ],
+            "Thời hạn (Tháng)": ["Vô thời hạn", "12", "36", "02"],
+            "Ghi chú": ["Chính thức", "Chính thức", "Chính thức", "Thử việc"],
+        }),
+    },
+    "phu_cap": {
+        "title": "💰 Danh mục Phụ cấp / Lương",
+        "df": pd.DataFrame({
+            "Mã PC": ["PC_CV", "PC_UD", "PC_TN", "PC_DH"],
+            "Tên Loại Phụ cấp": [
+                "Phụ cấp Chức vụ",
+                "Phụ cấp Ưu đãi nghề Y tế",
+                "Phụ cấp Thâm niên",
+                "Phụ cấp Độc hại / Nguy hiểm",
+            ],
+            "Tỷ lệ / Mức hưởng": ["0.4", "40%", "10%", "0.2"],
+            "Ghi chú": [
+                "Trưởng/Phó khoa",
+                "Cán bộ y tế",
+                "Trên 5 năm",
+                "Môi trường độc hại",
+            ],
+        }),
+    },
+    "ngach_luong": {
+        "title": "🏛️ Ngạch bậc lương cơ bản",
+        "df": pd.DataFrame({
+            "Mã Ngạch": ["V.08.01.01", "V.08.01.02", "V.08.01.03", "V.08.05.12"],
+            "Tên Ngạch lương": [
+                "Bác sĩ cao cấp (Hạng I)",
+                "Bác sĩ chính (Hạng II)",
+                "Bác sĩ (Hạng III)",
+                "Điều dưỡng (Hạng III)",
+            ],
+            "Hệ số Bậc 1": ["6.20", "4.40", "2.34", "2.34"],
+            "Bậc tối đa": ["8", "8", "12", "12"],
+        }),
+    },
+}
+
+
+# ---------------------------------------------------------
+# HÀM XỬ LÝ DỮ LIỆU CSDL SUPABASE
+# ---------------------------------------------------------
+def load_category_list():
+    if not supabase:
+        return {cat_key: item["title"] for cat_key, item in DEFAULT_CATEGORIES.items()}
+
+    try:
+        res = supabase.table("categories").select("cat_key, title").execute()
+        data = res.data
+        if data and len(data) > 0:
+            return {item["cat_key"]: item["title"] for item in data}
+        else:
+            # Khởi tạo mặc định nếu CSDL trống
+            initial_list = {}
+            for k, v in DEFAULT_CATEGORIES.items():
+                initial_list[k] = v["title"]
+                save_category_data(k, v["df"], v["title"])
+            return initial_list
+    except Exception as e:
+        st.error(f"Lỗi đọc danh sách danh mục từ Supabase: {e}")
+        return {cat_key: item["title"] for cat_key, item in DEFAULT_CATEGORIES.items()}
+
+
+def load_category_data(cat_key, default_df):
+    if not supabase:
+        return default_df
 
     try:
         res = (
-            supabase_client.table("categories")
-            .select("cat_key, title")
+            supabase.table("categories")
+            .select("content")
+            .eq("cat_key", cat_key)
             .execute()
         )
-        if res.data:
-            cat_dict = {}
-            for row in res.data:
-                k = str(row.get("cat_key", "")).strip()
-                t = str(row.get("title", "")).strip() or k
-
-                # Lọc bỏ DUY NHẤT các bảng chấm công tháng phát sinh tự động (như tk_2026_09)
-                if k.startswith("tk_20") or k.startswith("tk_19") or (
-                    "bảng chấm công tháng" in t.lower() and k != "tk_rules"
-                ):
-                    continue
-
-                cat_dict[k] = t
-
-            if cat_dict:
-                return cat_dict
-    except Exception:
-        pass
-
-    return default_cats
+        data = res.data
+        if data and len(data) > 0 and data[0]["content"]:
+            return pd.DataFrame(data[0]["content"])
+    except Exception as e:
+        st.warning(f"Chưa tải được dữ liệu từ DB, dùng mặc định: {e}")
+    return default_df
 
 
-# ---------------------------------------------------------
-# 3. GIAO DIỆN QUẢN LÝ DANH MỤC HỆ THỐNG ĐẦY ĐỦ CÔNG CỤ
-# ---------------------------------------------------------
-def render_category_management():
-    st.markdown(
-        "<h3 style='color: #003366;'>⚙️ Quản lý Danh mục Hệ thống & Đơn"
-        " vị</h3>",
-        unsafe_allow_html=True,
-    )
+def save_category_data(cat_key, df, title=None):
+    if not supabase:
+        st.error("Không có kết nối Supabase.")
+        return False
 
-    supabase = init_supabase()
+    try:
+        records = df.to_dict(orient="records")
+        payload = {"cat_key": cat_key, "content": records}
+        if title:
+            payload["title"] = title
 
-    # Tải danh sách danh mục thực tế
-    cat_dict = load_all_categories(supabase)
+        supabase.table("categories").upsert(payload).execute()
+        return True
+    except Exception as e:
+        st.error(f"Lỗi khi lưu vào Supabase: {e}")
+        return False
 
-    # --- KHU VỰC 1: QUẢN LÝ DANH SÁCH DANH MỤC (THÊM / XÓA / SỬA TÊN TAB) ---
-    with st.expander(
-        "➕ QUẢN LÝ DANH SÁCH DANH MỤC (THÊM / XÓA / SỬA TÊN TAB DANH MỤC)",
-        expanded=False,
-    ):
-        tab_add, tab_edit, tab_del = st.tabs([
-            "➕ Thêm Danh mục mới",
-            "✏️ Đổi tên Danh mục",
-            "🗑️ Xóa Danh mục",
-        ])
 
-        with tab_add:
-            with st.form("form_add_category", clear_on_submit=True):
-                c1, c2 = st.columns(2)
-                with c1:
-                    new_key = st.text_input(
-                        "Mã danh mục (Viết liền không dấu, ví dụ: trinh_do):"
-                    )
-                with c2:
-                    new_title = st.text_input(
-                        "Tên hiển thị Danh mục (Ví dụ: Trình độ chuyên môn):"
-                    )
-                btn_add_cat = st.form_submit_button("Thêm Danh mục vào Hệ thống")
-
-                if btn_add_cat:
-                    if not new_key or not new_title:
-                        st.error("⚠️️ Vui lòng nhập đầy đủ Mã và Tên danh mục!")
-                    else:
-                        clean_key = new_key.strip().lower()
-                        if supabase:
-                            supabase.table("categories").upsert({
-                                "cat_key": clean_key,
-                                "title": new_title.strip(),
-                                "content": [],
-                            }).execute()
-                        st.toast(
-                            f"✅ Đã thêm danh mục '{new_title}'!", icon="🎉"
-                        )
-                        st.success(f"✅ Đã tạo mới danh mục '{new_title}'!")
-                        st.rerun()
-
-        with tab_edit:
-            selected_edit_key = st.selectbox(
-                "Chọn danh mục cần đổi tên:",
-                options=list(cat_dict.keys()),
-                format_func=lambda x: cat_dict[x],
-                key="sel_cat_to_rename",
-            )
-            new_renamed_title = st.text_input(
-                "Tên hiển thị mới:", value=cat_dict[selected_edit_key]
-            )
-            if st.button("✏️ Cập nhật Tên Danh mục"):
-                if new_renamed_title and supabase:
-                    # Lấy content cũ
-                    res = (
-                        supabase.table("categories")
-                        .select("content")
-                        .eq("cat_key", selected_edit_key)
-                        .execute()
-                    )
-                    old_content = (
-                        res.data[0]["content"]
-                        if res.data and res.data[0].get("content")
-                        else []
-                    )
-
-                    supabase.table("categories").upsert({
-                        "cat_key": selected_edit_key,
-                        "title": new_renamed_title.strip(),
-                        "content": old_content,
-                    }).execute()
-                    st.toast("✅ Đã cập nhật tên danh mục!", icon="✏️")
-                    st.rerun()
-
-        with tab_del:
-            selected_del_key = st.selectbox(
-                "Chọn danh mục muốn xóa khỏi hệ thống:",
-                options=list(cat_dict.keys()),
-                format_func=lambda x: cat_dict[x],
-                key="sel_cat_to_delete",
-            )
-            if st.button("❌ Xóa Danh mục đã chọn", type="primary"):
-                if supabase and selected_del_key:
-                    supabase.table("categories").delete().eq(
-                        "cat_key", selected_del_key
-                    ).execute()
-                    st.toast("✅ Đã xóa danh mục thành công!", icon="🗑️")
-                    st.rerun()
-
-    st.markdown("---")
-
-    # --- KHU VỰC 2: THANH CHỌN DANH MỤC HIỆN TẠI ---
-    selected_cat_key = st.radio(
-        "Chọn danh mục làm việc:",
-        options=list(cat_dict.keys()),
-        format_func=lambda x: cat_dict[x],
-        horizontal=True,
-        key="radio_cat_selection_main",
-    )
-
-    current_cat_title = cat_dict[selected_cat_key]
-
-    # Load dữ liệu bảng chi tiết
-    df_cat = pd.DataFrame()
+def delete_category_from_db(cat_key):
     if supabase:
         try:
-            res = (
-                supabase.table("categories")
-                .select("content")
-                .eq("cat_key", selected_cat_key)
-                .execute()
-            )
-            if res.data and res.data[0].get("content"):
-                df_cat = pd.DataFrame(res.data[0]["content"])
-        except Exception:
-            pass
+            supabase.table("categories").delete().eq("cat_key", cat_key).execute()
+            return True
+        except Exception as e:
+            st.error(f"Lỗi khi xóa danh mục: {e}")
+    return False
 
-    # --- KHU VỰC 3: NHẬP DỮ LIỆU TỪ EXCEL / TẢI FILE EXCEL MẪU ---
-    with st.expander("📤 NHẬP DỮ LIỆU TỪ EXCEL / TẢI FILE EXCEL MẪU"):
-        col_ex1, col_ex2 = st.columns(2)
+
+# ---------------------------------------------------------
+# CÁC HÀM BỔ TRỢ GIAO DIỆN
+# ---------------------------------------------------------
+def convert_df_to_excel(df):
+    output = io.BytesIO()
+    with pd.ExcelWriter(output, engine="openpyxl") as writer:
+        df.to_excel(writer, index=False, sheet_name="Sheet1")
+    output.seek(0)
+    return output
+
+
+def build_safe_column_config(df):
+    column_config = {}
+    if df is None or df.empty:
+        return column_config
+
+    for col in df.columns:
+        col_str_series = df[col].fillna("").astype(str)
+        max_data_len = (
+            col_str_series.str.len().max() if not col_str_series.empty else 0
+        )
+        max_len = max(int(max_data_len or 0), len(str(col)))
+
+        if max_len <= 10:
+            width_type = "small"
+        elif max_len <= 25:
+            width_type = "medium"
+        else:
+            width_type = "large"
+
+        column_config[str(col)] = st.column_config.Column(
+            label=str(col), width=width_type
+        )
+    return column_config
+
+
+# ---------------------------------------------------------
+# GIAO DIỆN QUẢN LÝ TỪNG DANH MỤC
+# ---------------------------------------------------------
+def render_single_category(cat_key, cat_title):
+    session_key = f"df_{cat_key}"
+    version_key = f"ver_{cat_key}"
+
+    default_df = pd.DataFrame(
+        {"Mã": ["M01"], "Tên danh mục": ["Mẫu 01"], "Ghi chú": [""]}
+    )
+    if cat_key in DEFAULT_CATEGORIES:
+        default_df = DEFAULT_CATEGORIES[cat_key]["df"]
+
+    if session_key not in st.session_state:
+        st.session_state[session_key] = load_category_data(cat_key, default_df)
+
+    if version_key not in st.session_state:
+        st.session_state[version_key] = 0
+
+    # 1. NHẬP / EXPORT EXCEL
+    with st.expander("📊 NHẬP DỮ LIỆU TỪ EXCEL / TẢI FILE EXCEL MẪU", expanded=False):
+        col_ex1, col_ex2 = st.columns([1, 2])
+
         with col_ex1:
-            # Tạo file mẫu
-            out_sample = io.BytesIO()
-            with pd.ExcelWriter(out_sample, engine="openpyxl") as writer:
-                sample_cols = (
-                    df_cat.columns.tolist()
-                    if not df_cat.empty
-                    else ["Mã", "Tên", "Ghi chú"]
-                )
-                pd.DataFrame(columns=sample_cols).to_excel(
-                    writer, index=False, sheet_name="DanhMuc"
-                )
-            out_sample.seek(0)
+            st.markdown("**1. Tải file Excel mẫu (.xlsx):**")
+            excel_data = convert_df_to_excel(st.session_state[session_key].head(2))
             st.download_button(
-                label=f"📥 Tải File Mẫu Excel ({current_cat_title})",
-                data=out_sample,
-                file_name=f"Mau_Danh_Muc_{selected_cat_key}.xlsx",
+                label="📥 Tải xuống File mẫu (.xlsx)",
+                data=excel_data,
+                file_name=f"Mau_{cat_key}.xlsx",
                 mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+                key=f"btn_dl_{cat_key}",
             )
 
         with col_ex2:
-            up_cat_excel = st.file_uploader(
-                f"Tải lên file Excel cho {current_cat_title}:",
-                type=["xlsx", "xls"],
-                key=f"up_ex_{selected_cat_key}",
+            st.markdown("**2. Tải lên file Excel/CSV để cập nhật:**")
+            uploaded_file = st.file_uploader(
+                "Chọn file từ máy tính:",
+                type=["xlsx", "xls", "csv"],
+                key=f"upload_{cat_key}_{st.session_state[version_key]}",
             )
-            if up_cat_excel:
-                try:
-                    df_up = pd.read_excel(up_cat_excel).fillna("").astype(str)
-                    if supabase:
-                        supabase.table("categories").upsert({
-                            "cat_key": selected_cat_key,
-                            "title": current_cat_title,
-                            "content": df_up.to_dict(orient="records"),
-                        }).execute()
-                    st.toast("✅ Tải dữ liệu Excel thành công!", icon="🎉")
-                    st.success("✅ Đã cập nhật bảng danh mục từ tệp Excel!")
-                    st.rerun()
-                except Exception as e:
-                    st.error(f"Lỗi đọc file Excel: {e}")
 
-    # --- KHU VỰC 4: QUẢN LÝ CỘT TIÊU ĐỀ HỒ SƠ (THÊM / XÓA CỘT) ---
-    with st.expander("🛠️ QUẢN LÝ CỘT TIÊU ĐỀ (THÊM / XÓA CỘT)"):
-        col_c1, col_c2 = st.columns(2)
-        with col_c1:
-            new_col_name = st.text_input(
-                "Tên cột tiêu đề mới:", key="input_new_col_name"
-            )
-            if st.button("➕ Thêm cột vào Bảng"):
-                if new_col_name:
-                    if df_cat.empty:
-                        df_cat = pd.DataFrame(columns=[new_col_name.strip()])
-                    else:
-                        df_cat[new_col_name.strip()] = ""
-                    if supabase:
-                        supabase.table("categories").upsert({
-                            "cat_key": selected_cat_key,
-                            "title": current_cat_title,
-                            "content": df_cat.to_dict(orient="records"),
-                        }).execute()
-                    st.toast(
-                        f"✅ Đã thêm cột '{new_col_name}' thành công!", icon="➕"
-                    )
+        if uploaded_file is not None:
+            try:
+                if uploaded_file.name.endswith(".csv"):
+                    df_excel = pd.read_csv(uploaded_file)
+                else:
+                    df_excel = pd.read_excel(uploaded_file)
+
+                df_excel = df_excel.fillna("")
+                st.write("📌 **Xem trước dữ liệu tải lên:**")
+                st.dataframe(df_excel.head(5), use_container_width=True)
+
+                col_b1, col_b2 = st.columns(2)
+                with col_b1:
+                    if st.button("➕ Nhập nối tiếp vào bảng hiện tại", key=f"btn_append_{cat_key}"):
+                        new_df = pd.concat([st.session_state[session_key], df_excel], ignore_index=True).drop_duplicates()
+                        st.session_state[session_key] = new_df
+                        save_category_data(cat_key, new_df, cat_title)
+                        st.session_state[version_key] += 1
+                        st.success("✅ Đã cập nhật thành công lên CSDL!")
+                        st.rerun()
+
+                with col_b2:
+                    if st.button("🔄 Ghi đè toàn bộ dữ liệu cũ", type="primary", key=f"btn_overwrite_{cat_key}"):
+                        st.session_state[session_key] = df_excel
+                        save_category_data(cat_key, df_excel, cat_title)
+                        st.session_state[version_key] += 1
+                        st.success("✅ Đã ghi đè dữ liệu thành công lên CSDL!")
+                        st.rerun()
+            except Exception as e:
+                st.error(f"Lỗi đọc file: {e}")
+
+    # 2. QUẢN LÝ CỘT TIÊU ĐỀ
+    with st.expander("🛠️ QUẢN LÝ CỘT TIÊU ĐỀ CỦA BẢNG (THÊM / SỬA / XÓA CỘT)", expanded=False):
+        c_add, c_edit, c_del = st.columns(3)
+
+        with c_add:
+            st.markdown("**➕ Thêm cột mới**")
+            new_col = st.text_input("Nhập tên cột mới:", key=f"txt_add_col_{cat_key}")
+            if st.button("Thêm cột", key=f"btn_add_col_{cat_key}"):
+                if new_col and new_col not in st.session_state[session_key].columns:
+                    st.session_state[session_key][new_col] = ""
+                    save_category_data(cat_key, st.session_state[session_key], cat_title)
+                    st.session_state[version_key] += 1
+                    st.success(f"Đã thêm cột '{new_col}'")
                     st.rerun()
 
-        with col_c2:
-            if not df_cat.empty:
-                del_col_name = st.selectbox(
-                    "Chọn cột cần xóa:",
-                    options=df_cat.columns.tolist(),
-                    key="sel_col_to_del",
+        with c_edit:
+            st.markdown("**✏️️ Đổi tên cột tiêu đề**")
+            cols = list(st.session_state[session_key].columns)
+            col_to_rename = st.selectbox("Chọn cột cần đổi:", cols, key=f"sel_rename_{cat_key}")
+            renamed_name = st.text_input("Tên mới:", key=f"txt_rename_{cat_key}")
+            if st.button("Đổi tên", key=f"btn_rename_{cat_key}"):
+                if renamed_name and col_to_rename:
+                    st.session_state[session_key] = st.session_state[session_key].rename(columns={col_to_rename: renamed_name})
+                    save_category_data(cat_key, st.session_state[session_key], cat_title)
+                    st.session_state[version_key] += 1
+                    st.success("Đã đổi tên cột thành công!")
+                    st.rerun()
+
+        with c_del:
+            st.markdown("**🗑️ Xóa cột khỏi bảng**")
+            cols = list(st.session_state[session_key].columns)
+            col_to_del = st.selectbox("Chọn cột cần xóa:", cols, key=f"sel_del_{cat_key}")
+            if st.button("Xóa cột", type="primary", key=f"btn_del_col_{cat_key}"):
+                if col_to_del in st.session_state[session_key].columns:
+                    st.session_state[session_key] = st.session_state[session_key].drop(columns=[col_to_del])
+                    save_category_data(cat_key, st.session_state[session_key], cat_title)
+                    st.session_state[version_key] += 1
+                    st.success(f"Đã xóa cột '{col_to_del}'")
+                    st.rerun()
+
+    # 3. KHU VỰC XÓA HÀNG
+    with st.expander("🗑️ XÓA HÀNG TRONG BẢNG DANH MỤC", expanded=False):
+        current_df_del = st.session_state[session_key]
+        if not current_df_del.empty:
+            col_del_row1, col_del_row2 = st.columns([3, 1])
+
+            with col_del_row1:
+                first_col = current_df_del.columns[0]
+                row_options = [f"Hàng {idx + 1}: {row[first_col]}" for idx, row in current_df_del.iterrows()]
+                selected_rows_to_del = st.multiselect(
+                    "Chọn các hàng muốn xóa khỏi danh mục:",
+                    options=range(len(row_options)),
+                    format_func=lambda x: row_options[x],
+                    key=f"msel_del_rows_{cat_key}",
                 )
-                if st.button("❌ Xóa cột đã chọn"):
-                    df_cat.drop(columns=[del_col_name], inplace=True)
-                    if supabase:
-                        supabase.table("categories").upsert({
-                            "cat_key": selected_cat_key,
-                            "title": current_cat_title,
-                            "content": df_cat.to_dict(orient="records"),
-                        }).execute()
-                    st.toast(
-                        f"✅ Đã xóa cột '{del_col_name}' thành công!", icon="🗑️"
-                    )
-                    st.rerun()
 
-    st.markdown("---")
-    st.write(f"📋 **Chi tiết dữ liệu: {current_cat_title}**")
+            with col_del_row2:
+                st.write("")
+                st.write("")
+                if st.button("❌ Xóa hàng đã chọn", type="primary", key=f"btn_del_rows_{cat_key}"):
+                    if selected_rows_to_del:
+                        updated_df = current_df_del.drop(index=selected_rows_to_del).reset_index(drop=True)
+                        st.session_state[session_key] = updated_df
+                        save_category_data(cat_key, updated_df, cat_title)
+                        st.session_state[version_key] += 1
+                        st.success(f"Đã xóa {len(selected_rows_to_del)} hàng!")
+                        st.rerun()
+                    else:
+                        st.warning("Vui lòng chọn ít nhất 1 hàng để xóa.")
+        else:
+            st.info("Bảng hiện tại chưa có dữ liệu để xóa.")
 
-    # --- KHU VỰC 5: BẢNG DỮ LIỆU TƯƠNG TÁC (DATA EDITOR) ---
+    # 4. BẢNG HIỂN THỊ VÀ CHỈNH SỬA
+    st.write("")
+    current_df = st.session_state[session_key].fillna("")
+    safe_column_config = build_safe_column_config(current_df)
+
+    editor_dynamic_key = f"editor_{cat_key}_v{st.session_state[version_key]}"
+
     edited_df = st.data_editor(
-        df_cat,
-        use_container_width=True,
+        current_df,
+        use_container_width=False,
+        column_config=safe_column_config,
         num_rows="dynamic",
-        key=f"editor_cat_main_{selected_cat_key}",
+        key=editor_dynamic_key,
     )
 
-    if st.button(f"💾 Lưu cập nhật {current_cat_title}", type="primary"):
-        clean_edited = edited_df.fillna("").astype(str)
-        if supabase:
-            try:
-                supabase.table("categories").upsert({
-                    "cat_key": selected_cat_key,
-                    "title": current_cat_title,
-                    "content": clean_edited.to_dict(orient="records"),
-                }).execute()
-                st.toast(
-                    f"✅ Đã lưu thành công dữ liệu {current_cat_title}!",
-                    icon="💾",
-                )
-                st.success(
-                    f"✅ Đã lưu dữ liệu {current_cat_title} vào CSDL vĩnh viễn!"
-                )
-            except Exception as e:
-                st.error(f"Lỗi khi lưu CSDL: {e}")
-        else:
-            st.toast("✅ Đã cập nhật phiên làm việc!", icon="ℹ️")
-            st.success("✅ Đã cập nhật tạm thời trong phiên làm việc!")
+    col_save, col_reload = st.columns([2, 1])
+
+    with col_save:
+        if st.button(f"💾 Lưu danh mục {cat_title} vĩnh viễn", type="primary", key=f"btn_save_{cat_key}"):
+            st.session_state[session_key] = edited_df
+            if save_category_data(cat_key, edited_df, cat_title):
+                st.success("✅ Dữ liệu danh mục đã được lưu vĩnh viễn trên CSDL Supabase!")
+
+    with col_reload:
+        if st.button("🔄 Tải lại dữ liệu từ CSDL", key=f"btn_reload_{cat_key}"):
+            st.session_state[session_key] = load_category_data(cat_key, default_df)
+            st.session_state[version_key] += 1
+            st.success("🔄 Đã tải lại dữ liệu mới nhất từ CSDL!")
+            st.rerun()
+
+
+# ---------------------------------------------------------
+# ĐIỀU HƯỚNG CHÍNH
+# ---------------------------------------------------------
+def render_category_management():
+    st.subheader("Chi tiết danh mục hệ thống (Kết nối CSDL Supabase)")
+
+    cat_list = load_category_list()
+
+    with st.expander("⚙️ QUẢN LÝ DANH SÁCH DANH MỤC (THÊM / ĐỔI TÊN / XÓA TAB DANH MỤC)", expanded=False):
+        col_cat_add, col_cat_edit, col_cat_del = st.columns(3)
+
+        with col_cat_add:
+            st.markdown("**➕ Thêm danh mục mới**")
+            new_cat_title = st.text_input("Tên danh mục mới:", key="input_new_cat_title")
+            if st.button("Tạo Danh mục Mới", key="btn_create_cat"):
+                if new_cat_title:
+                    import re
+                    new_key = re.sub(r"\W+", "_", new_cat_title.lower()).strip("_")
+                    if not new_key:
+                        new_key = f"cat_{len(cat_list) + 1}"
+
+                    cat_title_full = f"📁 {new_cat_title}"
+                    init_df = pd.DataFrame({"Mã": ["M01"], "Tên " + new_cat_title: ["Nội dung 01"], "Ghi chú": [""]})
+
+                    save_category_data(new_key, init_df, cat_title_full)
+                    st.success(f"Đã tạo danh mục '{new_cat_title}' trên CSDL!")
+                    st.rerun()
+
+        with col_cat_edit:
+            st.markdown("**✏️ Đổi tên danh mục**")
+            selected_edit_key = st.selectbox(
+                "Chọn danh mục đổi tên:",
+                options=list(cat_list.keys()),
+                format_func=lambda x: cat_list[x],
+                key="sel_edit_cat",
+            )
+            renamed_cat_title = st.text_input("Tên mới danh mục:", key="input_rename_cat_title")
+            if st.button("Cập nhật Tên", key="btn_rename_cat"):
+                if renamed_cat_title and selected_edit_key:
+                    current_df = load_category_data(selected_edit_key, pd.DataFrame())
+                    save_category_data(selected_edit_key, current_df, renamed_cat_title)
+                    st.success("Đã đổi tên danh mục thành công!")
+                    st.rerun()
+
+        with col_cat_del:
+            st.markdown("**🗑️ Xóa danh mục**")
+            selected_del_key = st.selectbox(
+                "Chọn danh mục cần xóa:",
+                options=list(cat_list.keys()),
+                format_func=lambda x: cat_list[x],
+                key="sel_del_cat",
+            )
+            if st.button("Xóa Danh Mục Này", type="primary", key="btn_delete_cat"):
+                if selected_del_key in cat_list:
+                    delete_category_from_db(selected_del_key)
+                    st.success("Đã xóa danh mục khỏi CSDL Supabase!")
+                    st.rerun()
+
+    st.write("")
+
+    if not cat_list:
+        st.info("Chưa có danh mục nào. Hãy thêm mới ở trên.")
+        return
+
+    cat_keys = list(cat_list.keys())
+    cat_titles = [cat_list[k] for k in cat_keys]
+
+    tabs = st.tabs(cat_titles)
+
+    for idx, key in enumerate(cat_keys):
+        with tabs[idx]:
+            render_single_category(key, cat_list[key])
+
+
+if __name__ == "__main__":
+    render_category_management()
